@@ -52,8 +52,6 @@ needed for classic infantry cloning.
 
 ## Known limitations (this build)
 
-* **Vehicles (non-naval units)** are not yet covered by the extra-clone layer
-  (infantry + naval are). Antares still makes its 1 base vehicle clone.
 * **`CloneCount=0` cannot suppress** Antares' base clone from a co-loaded DLL
   (Antares already made it); it is treated as 1. True suppression needs takeover
   mode.
@@ -63,3 +61,8 @@ needed for classic infantry cloning.
   co-loaded DLL (that data lives in Antares' ext). Setting **either** to `no`
   currently drops **all** inherited veterancy (conservative; never over-grants).
   `.CountryBonus` and the master `Inherit`/`Ratio`/`Cap` work fully.
+* **Fix-1 mixed config edge:** if a producing factory both clones (via
+  `CloningFacility=`) *and* the house also owns separate vanilla Cloning Vats,
+  Antares may add a single extra vat-clone of one of our extra clones. Our own
+  layer never recurses (primary-only gate); this is a one-level Antares artifact
+  in an unusual setup. Pure Fix-1 (factory clones, no separate vats) is clean.

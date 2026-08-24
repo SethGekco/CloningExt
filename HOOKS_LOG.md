@@ -91,15 +91,38 @@ from recursing.
 
 ---
 
-## NOT YET HOOKED — the vehicle (non-naval unit) path
+## `0x4445F0` — vehicle (non-naval unit) exit — extra-clone dispatch  *(size 6)*
 
-Antares hooks `0x4445F6` (`BuildingClass_KickOutUnit_Clone_NonNavalUnit`, size 5)
-which **jumps to the shared epilogue `0x444971`**. At `0x444971`
-(`a1 ac e7 a8 00` = `mov eax,[0xA8E7AC]` — the `ScenarioInit` restore, followed by
-`pop edi/esi/ebp`), ESI/EDI have been clobbered by the branch, so there is **no
-clean point to read Factory/Production**. Covering vehicles therefore needs
-either winning the `0x4445F6` chain or a dedicated hook earlier in that branch —
-deferred and flagged. Infantry and naval are fully covered.
+| | |
+|---|---|
+| Contention | **none.** Antares is at `0x4445F6` (adjacent, not overlapping); `0x4445F0` is absent from the encyclopedia registry and the PDB map, and nothing branches into `0x4445F0..F5`. |
+| Status | **VERIFIED** (disassembly), **UNTESTED in game** |
+
+The vehicle branch keeps `ESI = factory`, `EDI = Production` all the way to its
+end. Antares takes the branch's last instruction, `0x4445F6`
+(`e9 76 03 00 00` = `jmp 0x444971`), and returns that non-zero jump — which would
+short-circuit a same-address chain if Antares ran first. Rather than depend on
+load order, we hook the instruction **immediately before** it:
+
+```
+4445f0:  ff 90 e8 01 00 00    call [eax+0x1E8]      <- our 6-byte hook
+4445f6:  e9 76 03 00 00       jmp  0x444971          <- Antares' hook
+```
+
+`0x4445F0 + 6 == 0x4445F6`, so the two patches are perfectly adjacent with no
+overlap. Our handler runs the extra-clone dispatch, Syringe restores EAX/ECX and
+executes the stolen `call [eax+0x1E8]` (a mission/voice call, not placement — the
+primary vehicle is already out), then control falls into Antares' hook at
+`0x4445F6`, which makes the base clone and jumps to the epilogue. Same
+primary-product gate as the other two sites.
+
+> Recursion is bounded the same way vanilla/Antares bounds it: a clone kicked
+> from a **dedicated** cloning building (vanilla `Cloning=`, or `CloningFacility=`
+> which Antares only allows on non-factory buildings) re-enters and hits Antares'
+> own bail (`FactoryType->Cloning || Factory not Infantry/Unit`). Our extras add a
+> primary-only gate on top, so our layer never recurses. The one documented edge
+> is a Fix-1 factory that clones *and* owns separate cloning vats: Antares may add
+> a single extra vat-clone of our clone. See INI_REFERENCE.md.
 
 ---
 

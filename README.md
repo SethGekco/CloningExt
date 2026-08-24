@@ -12,12 +12,11 @@ hooks — see [`HOOKS_LOG.md`](HOOKS_LOG.md) for the architecture and
 
 | Feature | Tag(s) | Status |
 |---|---|---|
-| Clones per source building | `CloneCount=` | ✅ infantry + naval |
+| Clones per source building | `CloneCount=` | ✅ infantry + naval + vehicle |
 | Clone veterancy ratio / cap | `CloneVeterancy.Ratio/.Cap/.Inherit*` | ✅ (ratio/cap/master); ⚠ granular academy/stolen partial |
 | Clone initial HP (fixed or synced-random) | `CloneInitialStrength[.Min]` | ✅ |
 | Extra clone slots by prerequisite/country | `CloneSlotN.*` incl. negative prereq & forbidden houses | ✅ |
 | Barracks that also clones | `CloningFacility=` on a factory | ✅ (Fix 1) |
-| Vehicle (non-naval) extra clones | — | ⛔ deferred (needs a verified hook point) |
 
 ## Build
 
@@ -33,8 +32,8 @@ CI (`.github/workflows/build.yml`) builds `DevBuild|x86` and uploads
 
 ## Status
 
-First implementation pass. Every hook address and register layout is verified
-against the `gamemd.exe` disassembly and upstream (Antares/Phobos) source, but
-**nothing has been exercised in a running game yet**. The `0x443C81` clone
-detection and the extra-clone recursion guard are the two things to watch first
-in-game.
+Infantry, naval and vehicle clone paths are all covered. Every hook address and
+register layout is verified against the `gamemd.exe` disassembly and upstream
+(Antares/Phobos) source, but **nothing has been exercised in a running game
+yet**. The `0x443C81` clone detection and the extra-clone recursion guard are the
+two things to watch first in-game.

@@ -11,11 +11,15 @@
 //
 //   0x444DBC  infantry exit        ESI=BuildingClass* factory, EDI=Production
 //   0x44441A  naval-unit clone     ESI=BuildingClass* factory, EDI=Production
+//   0x4445F0  vehicle exit         ESI=BuildingClass* factory, EDI=Production
 //
-// Antares' handlers at BOTH addresses `return 0`, so Syringe chains ours after
-// them without a race. The non-naval *vehicle* path (Antares 0x4445F6 -> jumps
-// to the shared epilogue 0x444971, where ESI/EDI are clobbered) has no clean
-// chain point and is intentionally NOT covered yet -- see HOOKS_LOG.md.
+// Antares' handlers at 0x444DBC and 0x44441A `return 0`, so Syringe chains ours
+// after them without a race. The non-naval *vehicle* path is different: Antares
+// occupies 0x4445F6 (size 5) and returns a non-zero jump to the shared epilogue
+// 0x444971 (where ESI/EDI are clobbered), so chaining at 0x4445F6 would depend on
+// winning load order. Instead we hook the adjacent 6-byte instruction at 0x4445F0
+// (0x4445F0 + 6 == 0x4445F6) -- no overlap, no contention -- and fall through into
+// Antares' hook. See HOOKS_LOG.md.
 //
 // RECURSION: every clone we (or Antares) kick re-enters KickOutUnit and reaches
 // these hooks again with EDI=the clone. We only act on the PRIMARY product --
@@ -137,6 +141,23 @@ DEFINE_HOOK(0x444DBC, BuildingClass_KickOutUnit_ExtraClones_Infantry, 0x5)
 }
 
 DEFINE_HOOK(0x44441A, BuildingClass_KickOutUnit_ExtraClones_NavalUnit, 0x6)
+{
+	GET(TechnoClass*, pProduction, EDI);
+	GET(BuildingClass*, pFactory, ESI);
+
+	Dispatch(pFactory, pProduction);
+	return 0;
+}
+
+// Non-naval unit (vehicle) path. Antares occupies 0x4445F6 (size 5) and returns
+// a non-zero jump, so chaining there would lose the race if Antares runs first.
+// Instead we hook the 6-byte `call [eax+0x1E8]` at 0x4445F0 that sits IMMEDIATELY
+// before it: 0x4445F0 + 6 == 0x4445F6, so our patch is adjacent to Antares' with
+// zero overlap and no contention (verified: not in the encyclopedia registry, no
+// inbound branches into 0x4445F0..F5). Our extras run, the stolen call executes
+// (Syringe restores EAX/ECX first), then control falls into Antares' hook, which
+// makes the base clone. ESI/EDI are the factory/Production throughout this branch.
+DEFINE_HOOK(0x4445F0, BuildingClass_KickOutUnit_ExtraClones_Vehicle, 0x6)
 {
 	GET(TechnoClass*, pProduction, EDI);
 	GET(BuildingClass*, pFactory, ESI);
