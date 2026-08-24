@@ -35,6 +35,8 @@
 
 #include <BuildingClass.h>
 #include <InfantryClass.h>
+#include <InfantryTypeClass.h>
+#include <UnitTypeClass.h>
 #include <FactoryClass.h>
 #include <HouseClass.h>
 #include <Unsorted.h>
@@ -53,6 +55,13 @@ namespace
 	}
 
 	// Produce our extra clones for a single primary-production event.
+	//
+	// Target semantics: each cloning-source building makes EXACTLY CloneCount
+	// clones of the produced unit. Antares already makes some of those, so we
+	// produce (CloneCount - antaresBaseFromThatSource) per source, where
+	// antaresBase is 1 or 0 depending on whether Antares would clone from that
+	// specific building. This makes CloneCount exact even in the "factory that
+	// also clones" case, where Antares bails entirely (base 0 everywhere).
 	void ProduceExtraClones(BuildingClass* pFactory, TechnoClass* pProduction)
 	{
 		auto const pOwner = pFactory->Owner;
@@ -64,9 +73,9 @@ namespace
 		if (!pExt || !pExt->Cloneable)
 			return;
 
-		int const perSource = pExt->CloneCount > 1 ? pExt->CloneCount - 1 : 0;
+		int const cloneCount = pExt->CloneCount;
 		int const slotBonus = pExt->ResolveSlotBonus(pOwner);
-		if (perSource <= 0 && slotBonus <= 0)
+		if (cloneCount <= 0 && slotBonus <= 0)
 			return;
 
 		// The clone comes out as the produced type itself. NOTE: this does not
@@ -77,9 +86,20 @@ namespace
 
 		bool const isInfantry = (abstract_cast<InfantryClass*>(pProduction) != nullptr);
 
-		// --- per-source extras: (CloneCount-1) from each qualifying building ---
-		if (perSource > 0)
+		// Did Antares' KickOutClones bail out entirely for this production? It
+		// bails when the producing factory is itself a cloning vat, or is not an
+		// infantry/unit factory (mirrors Antares Body.cpp:1140). When it bails it
+		// made zero base clones from every source.
+		auto const factoryKind = pFactory->Type->Factory;
+		bool const antaresBailed = pFactory->Type->Cloning
+			|| (factoryKind != InfantryTypeClass::AbsID
+				&& factoryKind != UnitTypeClass::AbsID);
+
+		// --- per-source: top each qualifying building up to CloneCount ---
+		if (cloneCount > 0)
 		{
+			bool const factoryNaval = pFactory->Type->Naval;
+
 			for (auto const pB : pOwner->Buildings)
 			{
 				if (!pB || pB->InLimbo)
@@ -90,21 +110,34 @@ namespace
 					continue;
 
 				bool isSource;
+				int antaresBase;
 				if (isInfantry)
+				{
+					// Antares infantry clones come only from vanilla Cloning=
+					// vats (and only when it didn't bail); we additionally treat
+					// our CloningFacility= as a source.
 					isSource = pBExt->IsCloningSource();
+					antaresBase = (!antaresBailed && pB->Type->Cloning) ? 1 : 0;
+				}
 				else
-					isSource = pBExt->CloningFacility
-						&& (pB->Type->Naval == pFactory->Type->Naval);
+				{
+					// Antares unit/naval clones come from CloningFacility= with
+					// a matching Naval flag.
+					bool const navalMatch = (pB->Type->Naval == factoryNaval);
+					isSource = pBExt->CloningFacility && navalMatch;
+					antaresBase = (!antaresBailed && isSource) ? 1 : 0;
+				}
 
 				if (!isSource)
 					continue;
 
-				for (int k = 0; k < perSource; ++k)
+				int const mine = cloneCount - antaresBase;
+				for (int k = 0; k < mine; ++k)
 					KickOneClone(pB, pCloneType, pOwner);
 			}
 		}
 
-		// --- slot bonus: kicked from the producing factory (always present) ---
+		// --- slot bonus: additive extra clones, kicked from the factory ---
 		for (int k = 0; k < slotBonus; ++k)
 			KickOneClone(pFactory, pCloneType, pOwner);
 	}

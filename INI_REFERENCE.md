@@ -9,9 +9,10 @@ count/slot/veterancy features to matter. See `HOOKS_LOG.md` for why.
 ```ini
 [SOMEUNIT]
 ; --- how many clones each cloning source makes of this unit ---
-CloneCount=1              ; int, default 1 (=vanilla). N>1 adds (N-1) extra
-                          ; clones per qualifying cloning source, on top of the
-                          ; one Antares already makes.
+CloneCount=1              ; int, default 1 (=vanilla). Each cloning source makes
+                          ; EXACTLY N clones of this unit: we produce N minus
+                          ; whatever Antares already made from that source (0 when
+                          ; Antares bailed, e.g. a factory that clones itself).
 Cloneable=yes             ; mirror of Antares' tag; no = our layer never clones
                           ; this unit.
 
@@ -52,9 +53,10 @@ needed for classic infantry cloning.
 
 ## Known limitations (this build)
 
-* **`CloneCount=0` cannot suppress** Antares' base clone from a co-loaded DLL
-  (Antares already made it); it is treated as 1. True suppression needs takeover
-  mode.
+* **`CloneCount=0` suppression is partial.** Where Antares bailed (a factory
+  that clones itself, e.g. GAPILE with `Cloning=yes`) it produces zero clones, so
+  0 fully suppresses. Where Antares makes a base clone from a dedicated vat, that
+  one clone remains (we can't un-make Antares' clone in augment mode).
 * Our EXTRA clones use the produced type and do **not** honour Antares'
   `ClonedAs=` (Antares' base clone still does).
 * `CloneVeterancy.Inherit.Academy` / `.StolenTech` are non-decomposable from a
