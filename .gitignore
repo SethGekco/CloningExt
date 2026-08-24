@@ -1,0 +1,17 @@
+# Build output
+Debug/
+DevBuild/
+Release/
+*.dll
+*.map
+*.pdb
+*.lib
+*.obj
+*.exp
+*.iobj
+*.ipdb
+
+# VS / user
+.vs/
+*.user
+*.suo
