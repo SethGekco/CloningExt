@@ -23,25 +23,39 @@
 
 #include <Ext/TechnoType/Body.h>
 #include <Ext/BuildingType/Body.h>
+#include <Cloning/State.h>
 
 #include <Utilities/Macro.h>
 
 #include <BuildingClass.h>
 #include <FootClass.h>
-#include <FactoryClass.h>
+#include <InfantryTypeClass.h>
+#include <UnitTypeClass.h>
 #include <Helpers/Cast.h>
 
 namespace
 {
-	// Is `pExiting` a CLONE leaving `pBuilding` (as opposed to the building's own
-	// primary product)? True when the building is a cloning source and the object
-	// is not the unit currently in that building's production factory.
+	// Is a real infantry/unit production factory (Factory=infantry|unit), as
+	// opposed to a dedicated cloning vat (Factory=none)?
+	bool IsProductionFactory(BuildingClass* pBuilding)
+	{
+		auto const k = pBuilding->Type->Factory;
+		return k == InfantryTypeClass::AbsID || k == UnitTypeClass::AbsID;
+	}
+
+	// Is `pExiting` a CLONE leaving `pBuilding` (as opposed to a building's own
+	// primary product)? Two independent signals, either of which means "clone":
 	//
-	// This is what makes "an infantry factory that also clones" (Fix 1) behave:
-	// the primary product matches Factory->Object and is left untouched, while the
-	// self-clone kicked by the cloning loop does not match and is treated as a
-	// clone. A dedicated CloningVat has no Factory, so everything it kicks is a
-	// clone.
+	//   1. We are mid-dispatch producing our own extra clones (ProducingExtras) --
+	//      covers the "factory that also clones" case, where the clone exits the
+	//      same barracks that made the primary, so building identity alone can't
+	//      tell them apart.
+	//   2. The building is a cloning source but NOT a production factory, i.e. a
+	//      dedicated cloning vat -- everything it kicks out is a clone (this also
+	//      catches Antares'/vanilla base clones from real Cloning= vats).
+	//
+	// The primary product of a factory-that-clones is excluded by both: it is not
+	// one of our extras, and it exits a production factory.
 	bool IsCloneExit(BuildingClass* pBuilding, TechnoClass* pExiting)
 	{
 		if (!pBuilding || !pExiting)
@@ -51,10 +65,7 @@ namespace
 		if (!pBExt || !pBExt->IsCloningSource())
 			return false;
 
-		if (pBuilding->Factory && pBuilding->Factory->Object == pExiting)
-			return false; // the primary product, not a clone
-
-		return true;
+		return CloningExt::ProducingExtras || !IsProductionFactory(pBuilding);
 	}
 }
 

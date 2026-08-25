@@ -41,6 +41,7 @@
     <ClInclude Include="src\CloningExt.h" />
     <ClInclude Include="src\Cloning\Slot.h" />
     <ClInclude Include="src\Cloning\Resolver.h" />
+    <ClInclude Include="src\Cloning\State.h" />
     <ClInclude Include="src\Ext\TechnoType\Body.h" />
     <ClInclude Include="src\Ext\BuildingType\Body.h" />
   </ItemGroup>

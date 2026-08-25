@@ -33,14 +33,16 @@
 
 #include <Utilities/Macro.h>
 
+#include <Cloning/State.h>
+
 #include <BuildingClass.h>
 #include <InfantryClass.h>
 #include <InfantryTypeClass.h>
 #include <UnitTypeClass.h>
-#include <FactoryClass.h>
 #include <HouseClass.h>
 #include <Unsorted.h>
 #include <Helpers/Cast.h>
+#include <Utilities/Debug.h>
 
 namespace
 {
@@ -137,30 +139,46 @@ namespace
 			}
 		}
 
+		Debug::Log("[CloningExt] produced extras for %s from %s (bailed=%d, count=%d, slots=%d)\n",
+			pType->ID, pFactory->Type->ID, antaresBailed ? 1 : 0, cloneCount, slotBonus);
+
 		// --- slot bonus: additive extra clones, kicked from the factory ---
 		for (int k = 0; k < slotBonus; ++k)
 			KickOneClone(pFactory, pCloneType, pOwner);
 	}
 
-	// Only the primary product triggers our extras; clones do not (they are not
-	// the object in the factory's production slot). This also prevents recursion.
-	bool IsPrimaryProduction(BuildingClass* pFactory, TechnoClass* pProduction)
+	// A genuine production event kicks the unit out of a real infantry/unit
+	// FACTORY. A clone is kicked out of a cloning VAT (Factory=none). This is the
+	// reliable primary-vs-clone discriminator -- BuildingClass::Factory is tracked
+	// house-side and is null here, so the old Factory->Object check never fired.
+	bool IsProductionFactory(BuildingClass* pFactory)
 	{
-		return pFactory
-			&& pFactory->Factory
-			&& pFactory->Factory->Object == pProduction;
+		if (!pFactory)
+			return false;
+		auto const k = pFactory->Type->Factory;
+		return k == InfantryTypeClass::AbsID || k == UnitTypeClass::AbsID;
 	}
 
 	void Dispatch(BuildingClass* pFactory, TechnoClass* pProduction)
 	{
-		if (!pProduction || !IsPrimaryProduction(pFactory, pProduction))
+		// Skip re-entry from our own extra-clone kicks (they come back through
+		// these same hooks) -- that both stops recursion and stops us counting a
+		// clone as a fresh production.
+		if (CloningExt::ProducingExtras)
 			return;
 
+		// Only real production events trigger extras. Clones kicked from a vat
+		// (Factory=none) fall out here, so Antares' base clones never get topped up.
+		if (!pProduction || !IsProductionFactory(pFactory))
+			return;
+
+		CloningExt::ProducingExtras = true;
 		// KickOutUnit toggles ScenarioInit off around clone creation the way
 		// Antares does; mirror that so the game re-disables it as expected.
 		--Unsorted::ScenarioInit;
 		ProduceExtraClones(pFactory, pProduction);
 		++Unsorted::ScenarioInit;
+		CloningExt::ProducingExtras = false;
 	}
 }
 
