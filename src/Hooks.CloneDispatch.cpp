@@ -46,14 +46,19 @@
 
 namespace
 {
-	void KickOneClone(BuildingClass* pFrom, TechnoTypeClass* pCloneType, HouseClass* pOwner)
+	// Returns true when a clone was successfully kicked out.
+	bool KickOneClone(BuildingClass* pFrom, TechnoTypeClass* pCloneType, HouseClass* pOwner)
 	{
 		auto const pClone = static_cast<TechnoClass*>(pCloneType->CreateObject(pOwner));
 		if (!pClone)
-			return;
+			return false;
 
 		if (pFrom->KickOutUnit(pClone, CellStruct::Empty) != KickOutResult::Succeeded)
+		{
 			pClone->UnInit();
+			return false;
+		}
+		return true;
 	}
 
 	// Produce our extra clones for a single primary-production event.
@@ -85,6 +90,8 @@ namespace
 		// base clone Antares makes still respects it, only our EXTRAS use the
 		// produced type. Documented in INI_REFERENCE.md.
 		auto const pCloneType = pType;
+
+		int made = 0; // clones actually kicked out, for an accurate log line
 
 		bool const isInfantry = (abstract_cast<InfantryClass*>(pProduction) != nullptr);
 
@@ -135,16 +142,19 @@ namespace
 
 				int const mine = cloneCount - antaresBase;
 				for (int k = 0; k < mine; ++k)
-					KickOneClone(pB, pCloneType, pOwner);
+					made += KickOneClone(pB, pCloneType, pOwner) ? 1 : 0;
 			}
 		}
 
-		Debug::Log("[CloningExt] produced extras for %s from %s (bailed=%d, count=%d, slots=%d)\n",
-			pType->ID, pFactory->Type->ID, antaresBailed ? 1 : 0, cloneCount, slotBonus);
-
 		// --- slot bonus: additive extra clones, kicked from the factory ---
 		for (int k = 0; k < slotBonus; ++k)
-			KickOneClone(pFactory, pCloneType, pOwner);
+			made += KickOneClone(pFactory, pCloneType, pOwner) ? 1 : 0;
+
+		// Log only when we actually produced something, and report the real count
+		// (a bare "cloneCount" was misleading when no cloning source existed).
+		if (made > 0)
+			Debug::Log("[CloningExt] cloned %s x%d from %s (bailed=%d, per-source=%d, slots=%d)\n",
+				pType->ID, made, pFactory->Type->ID, antaresBailed ? 1 : 0, cloneCount, slotBonus);
 	}
 
 	// A genuine production event kicks the unit out of a real infantry/unit
