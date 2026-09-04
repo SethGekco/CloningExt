@@ -40,6 +40,8 @@
 #include <InfantryTypeClass.h>
 #include <UnitTypeClass.h>
 #include <HouseClass.h>
+#include <MapClass.h>
+#include <CellClass.h>
 #include <Unsorted.h>
 #include <Helpers/Cast.h>
 #include <Utilities/Debug.h>
@@ -47,13 +49,23 @@
 namespace
 {
 	// Returns true when a clone was successfully kicked out.
+	//
+	// We pass the BUILDING'S map cell as the kick-out target (not CellStruct::Empty,
+	// which is literally cell {0,0} at the map corner). KickOutUnit scans outward
+	// from the target for a free cell, so giving it the building's own cell lets
+	// several clones from the same building scatter to different cells instead of
+	// all fighting for one exit -- the same pattern Antares uses to kick a whole
+	// list of units out of one building (KickOutOfRubble / FreeUnits).
 	bool KickOneClone(BuildingClass* pFrom, TechnoTypeClass* pCloneType, HouseClass* pOwner)
 	{
 		auto const pClone = static_cast<TechnoClass*>(pCloneType->CreateObject(pOwner));
 		if (!pClone)
 			return false;
 
-		if (pFrom->KickOutUnit(pClone, CellStruct::Empty) != KickOutResult::Succeeded)
+		auto const pCell = MapClass::Instance.GetCellAt(pFrom->Location);
+		CellStruct const target = pCell ? pCell->MapCoords : CellStruct::Empty;
+
+		if (pFrom->KickOutUnit(pClone, target) != KickOutResult::Succeeded)
 		{
 			pClone->UnInit();
 			return false;
