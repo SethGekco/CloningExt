@@ -48,24 +48,42 @@
 
 namespace
 {
-	// Returns true when a clone was successfully kicked out.
+	// Returns true when a clone was successfully placed.
 	//
-	// We pass the BUILDING'S map cell as the kick-out target (not CellStruct::Empty,
-	// which is literally cell {0,0} at the map corner). KickOutUnit scans outward
-	// from the target for a free cell, so giving it the building's own cell lets
-	// several clones from the same building scatter to different cells instead of
-	// all fighting for one exit -- the same pattern Antares uses to kick a whole
-	// list of units out of one building (KickOutOfRubble / FreeUnits).
+	// We DON'T use KickOutUnit: it only ever clears one exit cell per production,
+	// so every clone after the first failed and was discarded (the "always one
+	// clone" bug). Instead we ask the game's own placement finder,
+	// MapClass::NearByLocation, for a free cell near the building and Unlimbo the
+	// clone there. NearByLocation skips cells that are already occupied -- including
+	// clones we just placed this frame -- so repeated calls scatter the clones.
+	// This is the same NearByLocation + Unlimbo pattern Antares uses to deliver
+	// units to the map (SWTypes/UnitDelivery.cpp).
 	bool KickOneClone(BuildingClass* pFrom, TechnoTypeClass* pCloneType, HouseClass* pOwner)
 	{
 		auto const pClone = static_cast<TechnoClass*>(pCloneType->CreateObject(pOwner));
 		if (!pClone)
 			return false;
 
-		auto const pCell = MapClass::Instance.GetCellAt(pFrom->Location);
-		CellStruct const target = pCell ? pCell->MapCoords : CellStruct::Empty;
+		auto const pOriginCell = MapClass::Instance.GetCellAt(pFrom->Location);
+		CellStruct const origin = pOriginCell ? pOriginCell->MapCoords : CellStruct::Empty;
 
-		if (pFrom->KickOutUnit(pClone, target) != KickOutResult::Succeeded)
+		CellStruct const place = MapClass::Instance.NearByLocation(
+			origin, pCloneType->SpeedType, -1, pCloneType->MovementZone,
+			false, 1, 1, false, false, false, false, CellStruct::Empty, false, false);
+
+		auto const pCell = MapClass::Instance.TryGetCellAt(place);
+		if (!pCell)
+		{
+			pClone->UnInit();
+			return false;
+		}
+
+		auto const xyz = pCell->GetCoordsWithBridge();
+		auto const facing = static_cast<DirType>(
+			(MapClass::GetCellIndex(pCell->MapCoords) & 7u) << 5);
+
+		pClone->QueueMission(Mission::Guard, false);
+		if (!pClone->Unlimbo(xyz, facing))
 		{
 			pClone->UnInit();
 			return false;
@@ -103,7 +121,8 @@ namespace
 		// produced type. Documented in INI_REFERENCE.md.
 		auto const pCloneType = pType;
 
-		int made = 0; // clones actually kicked out, for an accurate log line
+		int made = 0;      // clones actually placed
+		int attempted = 0; // clones we tried to make (reflects CloneCount * mult + slots)
 
 		bool const isInfantry = (abstract_cast<InfantryClass*>(pProduction) != nullptr);
 
@@ -159,19 +178,27 @@ namespace
 					mult = 0;
 				int const mine = cloneCount * mult - antaresBase;
 				for (int k = 0; k < mine; ++k)
+				{
+					++attempted;
 					made += KickOneClone(pB, pCloneType, pOwner) ? 1 : 0;
+				}
 			}
 		}
 
 		// --- slot bonus: additive extra clones, kicked from the factory ---
 		for (int k = 0; k < slotBonus; ++k)
+		{
+			++attempted;
 			made += KickOneClone(pFactory, pCloneType, pOwner) ? 1 : 0;
+		}
 
-		// Log only when we actually produced something, and report the real count
-		// (a bare "cloneCount" was misleading when no cloning source existed).
-		if (made > 0)
-			Debug::Log("[CloningExt] cloned %s x%d from %s (bailed=%d, per-source=%d, slots=%d)\n",
-				pType->ID, made, pFactory->Type->ID, antaresBailed ? 1 : 0, cloneCount, slotBonus);
+		// Log both what we tried and what actually placed, so an off count is easy
+		// to diagnose (attempted<expected => tag/mult not read; made<attempted =>
+		// placement failed).
+		if (attempted > 0)
+			Debug::Log("[CloningExt] %s from %s: made %d/%d (bailed=%d, count=%d, slots=%d)\n",
+				pType->ID, pFactory->Type->ID, made, attempted,
+				antaresBailed ? 1 : 0, cloneCount, slotBonus);
 	}
 
 	// A genuine production event kicks the unit out of a real infantry/unit
