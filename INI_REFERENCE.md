@@ -46,6 +46,12 @@ CloningFacility=yes       ; Antares' tag, re-read by us so our extra-clone layer
                           ; can enumerate the same source buildings. A barracks
                           ; may set this AND produce normally (Fix 1): its primary
                           ; product is never treated as a clone.
+Cloning.Mult=1            ; int, default 1. This building makes
+                          ; CloneCount * Cloning.Mult clones of each unit, so
+                          ; Cloning.Mult=2 doubles whatever the unit's CloneCount
+                          ; asks for (2 clones from a default CloneCount=1 unit,
+                          ; 4 from a CloneCount=2 unit). 0 = this building never
+                          ; clones.
 ```
 
 The vanilla `Cloning=yes` (Cloning Vats) flag is honoured directly — no extra tag

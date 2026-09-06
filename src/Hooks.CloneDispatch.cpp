@@ -152,7 +152,12 @@ namespace
 				if (!isSource)
 					continue;
 
-				int const mine = cloneCount - antaresBase;
+				// Each source makes CloneCount * this building's Cloning.Mult
+				// clones; subtract the one Antares already made from this source.
+				int mult = pBExt->CloningMult;
+				if (mult < 0)
+					mult = 0;
+				int const mine = cloneCount * mult - antaresBase;
 				for (int k = 0; k < mine; ++k)
 					made += KickOneClone(pB, pCloneType, pOwner) ? 1 : 0;
 			}

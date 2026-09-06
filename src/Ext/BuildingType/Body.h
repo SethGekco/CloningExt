@@ -34,9 +34,15 @@ public:
 		// so it is not duplicated here.
 		Valueable<bool> CloningFacility;
 
+		// Per-building clone multiplier (Cloning.Mult=, default 1). A cloning
+		// source makes CloneCount * Cloning.Mult clones of the produced unit, so
+		// this scales whatever the unit's own CloneCount asks for.
+		Valueable<int> CloningMult;
+
 		ExtData(BuildingTypeClass* OwnerObject)
 			: Extension<BuildingTypeClass>(OwnerObject)
 			, CloningFacility { false }
+			, CloningMult { 1 }
 		{ }
 
 		virtual ~ExtData() = default;
