@@ -16,6 +16,7 @@ void TechnoTypeExt::ExtData::LoadFromINIFile(CCINIClass* pINI)
 
 	this->CloneCount.Read(exINI, pID, "CloneCount");
 	this->Cloneable.Read(exINI, pID, "Cloneable");
+	this->MultBlacklist.Read(exINI, pID, "Cloning.Mult.Blacklist");
 
 	// Veterancy controls.
 	this->Veterancy.Ratio.Read(exINI, pID, "CloneVeterancy.Ratio");

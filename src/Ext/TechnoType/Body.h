@@ -4,6 +4,7 @@
 #include <Utilities/TemplateDef.h>
 
 #include <TechnoTypeClass.h>
+#include <BuildingTypeClass.h>
 
 #include <Cloning/Slot.h>
 #include <Cloning/Resolver.h>
@@ -42,6 +43,11 @@ public:
 		// Prerequisite/house-gated extra cloning slots. Count-prefixed list.
 		std::vector<CloneSlot> Slots;
 
+		// Buildings that do NOT apply their Cloning.Mult to this unit
+		// (Cloning.Mult.Blacklist=). This unit is cloned at multiplier 1 by any
+		// listed building -- the exception works from either side.
+		ValueableVector<BuildingTypeClass*> MultBlacklist;
+
 		ExtData(TechnoTypeClass* OwnerObject)
 			: Extension<TechnoTypeClass>(OwnerObject)
 			, CloneCount { 1 }
@@ -49,6 +55,7 @@ public:
 			, Veterancy {}
 			, Strength {}
 			, Slots {}
+			, MultBlacklist {}
 		{ }
 
 		virtual ~ExtData() = default;

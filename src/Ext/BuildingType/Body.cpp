@@ -18,6 +18,7 @@ void BuildingTypeExt::ExtData::LoadFromINIFile(CCINIClass* pINI)
 	this->CloningFacility.Read(exINI, pID, "CloningFacility");
 
 	this->CloningMult.Read(exINI, pID, "Cloning.Mult");
+	this->MultBlacklist.Read(exINI, pID, "Cloning.Mult.Blacklist");
 }
 
 // ============================================================================

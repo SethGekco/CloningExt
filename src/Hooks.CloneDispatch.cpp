@@ -91,6 +91,24 @@ namespace
 		return true;
 	}
 
+	// The Cloning.Mult a building applies to a given unit, honouring the
+	// Cloning.Mult.Blacklist exception from EITHER side (the building lists the
+	// unit, or the unit lists the building). A blacklisted pairing falls back to 1.
+	int EffectiveMult(BuildingTypeExt::ExtData* pBExt, BuildingTypeClass* pBType,
+		TechnoTypeExt::ExtData* pUExt, TechnoTypeClass* pUType)
+	{
+		int const m = pBExt->CloningMult;
+		if (m <= 1)
+			return m < 0 ? 0 : m; // 0 suppresses; 1 (and <0 clamp) is a no-op
+
+		if (pBExt->MultBlacklist.Contains(pUType))
+			return 1;
+		if (pUExt && pUExt->MultBlacklist.Contains(pBType))
+			return 1;
+
+		return m;
+	}
+
 	// Produce our extra clones for a single primary-production event.
 	//
 	// Target semantics: each cloning-source building makes EXACTLY CloneCount
@@ -172,10 +190,9 @@ namespace
 					continue;
 
 				// Each source makes CloneCount * this building's Cloning.Mult
-				// clones; subtract the one Antares already made from this source.
-				int mult = pBExt->CloningMult;
-				if (mult < 0)
-					mult = 0;
+				// clones (blacklist exceptions honoured); subtract the one Antares
+				// already made from this source.
+				int const mult = EffectiveMult(pBExt, pB->Type, pExt, pType);
 				int const mine = cloneCount * mult - antaresBase;
 				for (int k = 0; k < mine; ++k)
 				{
@@ -185,8 +202,12 @@ namespace
 			}
 		}
 
-		// --- slot bonus: additive extra clones, kicked from the factory ---
-		for (int k = 0; k < slotBonus; ++k)
+		// --- slot bonus: additive extra clones, kicked from the factory. These
+		// scale by the producing building's Cloning.Mult too (same blacklist rule).
+		auto const pFacExt = BuildingTypeExt::ExtMap.Find(pFactory->Type);
+		int const slotMult = pFacExt ? EffectiveMult(pFacExt, pFactory->Type, pExt, pType) : 1;
+		int const slotTotal = slotBonus * slotMult;
+		for (int k = 0; k < slotTotal; ++k)
 		{
 			++attempted;
 			made += KickOneClone(pFactory, pCloneType, pOwner) ? 1 : 0;
@@ -198,7 +219,7 @@ namespace
 		if (attempted > 0)
 			Debug::Log("[CloningExt] %s from %s: made %d/%d (bailed=%d, count=%d, slots=%d)\n",
 				pType->ID, pFactory->Type->ID, made, attempted,
-				antaresBailed ? 1 : 0, cloneCount, slotBonus);
+				antaresBailed ? 1 : 0, cloneCount, slotTotal);
 	}
 
 	// A genuine production event kicks the unit out of a real infantry/unit

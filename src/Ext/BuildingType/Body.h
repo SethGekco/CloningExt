@@ -4,6 +4,7 @@
 #include <Utilities/TemplateDef.h>
 
 #include <BuildingTypeClass.h>
+#include <TechnoTypeClass.h>
 
 // Per-BuildingType cloning settings.
 //
@@ -36,13 +37,19 @@ public:
 
 		// Per-building clone multiplier (Cloning.Mult=, default 1). A cloning
 		// source makes CloneCount * Cloning.Mult clones of the produced unit, so
-		// this scales whatever the unit's own CloneCount asks for.
+		// this scales whatever the unit's own CloneCount asks for (and the
+		// slot-bonus clones it kicks out).
 		Valueable<int> CloningMult;
+
+		// Units exempt from THIS building's Cloning.Mult (Cloning.Mult.Blacklist=).
+		// A listed unit is cloned at multiplier 1 by this building.
+		ValueableVector<TechnoTypeClass*> MultBlacklist;
 
 		ExtData(BuildingTypeClass* OwnerObject)
 			: Extension<BuildingTypeClass>(OwnerObject)
 			, CloningFacility { false }
 			, CloningMult { 1 }
+			, MultBlacklist {}
 		{ }
 
 		virtual ~ExtData() = default;

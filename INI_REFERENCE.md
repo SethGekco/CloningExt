@@ -15,6 +15,10 @@ CloneCount=1              ; int, default 1 (=vanilla). Each cloning source makes
                           ; Antares bailed, e.g. a factory that clones itself).
 Cloneable=yes             ; mirror of Antares' tag; no = our layer never clones
                           ; this unit.
+Cloning.Mult.Blacklist=   ; BuildingType list. These buildings do NOT apply their
+                          ; Cloning.Mult to this unit (it is cloned at multiplier
+                          ; 1). The exception fires from either side -- building's
+                          ; list of units OR unit's list of buildings.
 
 ; --- clone veterancy ---
 CloneVeterancy.Ratio=1.0             ; clone veterancy = source * Ratio
@@ -50,8 +54,10 @@ Cloning.Mult=1            ; int, default 1. This building makes
                           ; CloneCount * Cloning.Mult clones of each unit, so
                           ; Cloning.Mult=2 doubles whatever the unit's CloneCount
                           ; asks for (2 clones from a default CloneCount=1 unit,
-                          ; 4 from a CloneCount=2 unit). 0 = this building never
-                          ; clones.
+                          ; 4 from a CloneCount=2 unit). Also scales the
+                          ; slot-bonus clones. 0 = this building never clones.
+Cloning.Mult.Blacklist=   ; TechnoType list. These units are exempt from THIS
+                          ; building's Cloning.Mult (cloned at multiplier 1).
 ```
 
 The vanilla `Cloning=yes` (Cloning Vats) flag is honoured directly — no extra tag
