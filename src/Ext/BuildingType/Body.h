@@ -45,11 +45,20 @@ public:
 		// A listed unit is cloned at multiplier 1 by this building.
 		ValueableVector<TechnoTypeClass*> MultBlacklist;
 
+		// Whether clones this building makes should count as "built" for co-DLLs
+		// that detect production at KickOutUnit (e.g. GiftBox/Host). Nullable so
+		// "unset" is a real state: unset = defer to the unit / default (no). On a
+		// yes-vs-no conflict with the unit's tag, the higher .Weight decides.
+		Nullable<bool> ConsideredBuilt;
+		Valueable<int> ConsideredBuiltWeight;
+
 		ExtData(BuildingTypeClass* OwnerObject)
 			: Extension<BuildingTypeClass>(OwnerObject)
 			, CloningFacility { false }
 			, CloningMult { 1 }
 			, MultBlacklist {}
+			, ConsideredBuilt {}
+			, ConsideredBuiltWeight { 0 }
 		{ }
 
 		virtual ~ExtData() = default;

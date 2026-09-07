@@ -19,6 +19,10 @@ Cloning.Mult.Blacklist=   ; BuildingType list. These buildings do NOT apply thei
                           ; Cloning.Mult to this unit (it is cloned at multiplier
                           ; 1). The exception fires from either side -- building's
                           ; list of units OR unit's list of buildings.
+Cloning.ConsideredBuilt=  ; yes/no, unset by default. Whether clones OF this unit
+                          ; count as "built" for production-detecting co-DLLs.
+Cloning.ConsideredBuilt.Weight=0  ; int. Conflict resolver vs the building's tag:
+                          ; heavier weight wins; the unit wins exact ties.
 
 ; --- clone veterancy ---
 CloneVeterancy.Ratio=1.0             ; clone veterancy = source * Ratio
@@ -58,7 +62,29 @@ Cloning.Mult=1            ; int, default 1. This building makes
                           ; slot-bonus clones. 0 = this building never clones.
 Cloning.Mult.Blacklist=   ; TechnoType list. These units are exempt from THIS
                           ; building's Cloning.Mult (cloned at multiplier 1).
+Cloning.ConsideredBuilt=  ; yes/no, unset by default. Whether clones this building
+                          ; makes count as "built" for co-DLLs that detect
+                          ; production (GiftBox/Host). Unset = defer to the unit /
+                          ; default no. See the weight note below.
+Cloning.ConsideredBuilt.Weight=0  ; int. On a yes-vs-no conflict between this
+                          ; building and the unit, the higher weight decides.
 ```
+
+### "Considered built" resolution
+
+`Cloning.ConsideredBuilt` exists on both the cloning **building** and the **unit**.
+When a clone is made:
+
+* neither side sets it -> **no** (clone is a silent spawn; the game is unchanged
+  and no built-detection DLL sees it);
+* only one side sets it -> that side wins;
+* both set it -> the side with the higher `.Weight` wins (unit wins exact ties).
+
+A `yes` result routes that clone through `KickOutUnit` so co-DLLs that mark
+production at its entry (e.g. GiftBox/Host at `0x443C60`) record it as built.
+Placement still scatters via the normal free-cell finder. With no such DLL
+loaded the only difference a `yes` makes is that the clone exits like a produced
+unit rather than being placed silently.
 
 The vanilla `Cloning=yes` (Cloning Vats) flag is honoured directly — no extra tag
 needed for classic infantry cloning.

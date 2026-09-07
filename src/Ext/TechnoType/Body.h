@@ -48,6 +48,12 @@ public:
 		// listed building -- the exception works from either side.
 		ValueableVector<BuildingTypeClass*> MultBlacklist;
 
+		// Whether clones OF this unit should count as "built" for co-DLLs that
+		// detect production at KickOutUnit. Unset = defer to the building/default.
+		// On a conflict with the building's tag, the higher .Weight decides.
+		Nullable<bool> ConsideredBuilt;
+		Valueable<int> ConsideredBuiltWeight;
+
 		ExtData(TechnoTypeClass* OwnerObject)
 			: Extension<TechnoTypeClass>(OwnerObject)
 			, CloneCount { 1 }
@@ -56,6 +62,8 @@ public:
 			, Strength {}
 			, Slots {}
 			, MultBlacklist {}
+			, ConsideredBuilt {}
+			, ConsideredBuiltWeight { 0 }
 		{ }
 
 		virtual ~ExtData() = default;

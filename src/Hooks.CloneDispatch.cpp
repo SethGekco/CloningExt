@@ -48,22 +48,16 @@
 
 namespace
 {
-	// Returns true when a clone was successfully placed.
+	// Place an already-created clone at a free cell near pFrom via Unlimbo.
 	//
-	// We DON'T use KickOutUnit: it only ever clears one exit cell per production,
-	// so every clone after the first failed and was discarded (the "always one
-	// clone" bug). Instead we ask the game's own placement finder,
-	// MapClass::NearByLocation, for a free cell near the building and Unlimbo the
-	// clone there. NearByLocation skips cells that are already occupied -- including
-	// clones we just placed this frame -- so repeated calls scatter the clones.
-	// This is the same NearByLocation + Unlimbo pattern Antares uses to deliver
-	// units to the map (SWTypes/UnitDelivery.cpp).
-	bool KickOneClone(BuildingClass* pFrom, TechnoTypeClass* pCloneType, HouseClass* pOwner)
+	// We ask the game's own placement finder, MapClass::NearByLocation, for a free
+	// cell near the building and Unlimbo the clone there. NearByLocation skips
+	// cells that are already occupied -- including clones placed moments ago -- so
+	// repeated calls scatter the clones (the same pattern Antares uses in
+	// SWTypes/UnitDelivery.cpp). This is why we do NOT rely on KickOutUnit for
+	// placement: it only clears one exit cell per production.
+	bool UnlimboClone(BuildingClass* pFrom, TechnoClass* pClone, TechnoTypeClass* pCloneType)
 	{
-		auto const pClone = static_cast<TechnoClass*>(pCloneType->CreateObject(pOwner));
-		if (!pClone)
-			return false;
-
 		auto const pOriginCell = MapClass::Instance.GetCellAt(pFrom->Location);
 		CellStruct const origin = pOriginCell ? pOriginCell->MapCoords : CellStruct::Empty;
 
@@ -73,22 +67,48 @@ namespace
 
 		auto const pCell = MapClass::Instance.TryGetCellAt(place);
 		if (!pCell)
-		{
-			pClone->UnInit();
 			return false;
-		}
 
 		auto const xyz = pCell->GetCoordsWithBridge();
 		auto const facing = static_cast<DirType>(
 			(MapClass::GetCellIndex(pCell->MapCoords) & 7u) << 5);
 
 		pClone->QueueMission(Mission::Guard, false);
-		if (!pClone->Unlimbo(xyz, facing))
-		{
-			pClone->UnInit();
+		return pClone->Unlimbo(xyz, facing);
+	}
+
+	// Create and place one clone. Returns true when it ends up on the map.
+	//
+	// asBuilt: when true, the clone is first run through BuildingClass::KickOutUnit
+	// so co-DLLs that record production at its entry (GiftBox/Host @0x443C60) mark
+	// it "built". KickOutUnit places it when the exit is clear; when it can't, the
+	// clone is left in limbo and we scatter it via Unlimbo -- either way the mark
+	// already happened at the entry. asBuilt=false (the default) skips KickOutUnit
+	// entirely, so with no built-detection DLL loaded the tag changes nothing.
+	bool KickOneClone(BuildingClass* pFrom, TechnoTypeClass* pCloneType,
+		HouseClass* pOwner, bool asBuilt)
+	{
+		auto const pClone = static_cast<TechnoClass*>(pCloneType->CreateObject(pOwner));
+		if (!pClone)
 			return false;
+
+		if (asBuilt)
+		{
+			auto const pOriginCell = MapClass::Instance.GetCellAt(pFrom->Location);
+			CellStruct const origin = pOriginCell ? pOriginCell->MapCoords : CellStruct::Empty;
+
+			if (pFrom->KickOutUnit(pClone, origin) == KickOutResult::Succeeded)
+				return true;
+			if (!pClone->InLimbo)
+				return true; // placed despite a non-Succeeded return
+			// otherwise it is still in limbo -- scatter it ourselves below
 		}
-		return true;
+
+		if (UnlimboClone(pFrom, pClone, pCloneType))
+			return true;
+
+		pClone->UnInit();
+		return false;
 	}
 
 	// The Cloning.Mult a building applies to a given unit, honouring the
@@ -107,6 +127,27 @@ namespace
 			return 1;
 
 		return m;
+	}
+
+	// Should a clone made by this building, of this unit, be treated as "built"
+	// (routed through KickOutUnit so production-detecting co-DLLs record it)?
+	// Unset on both sides => false (silent spawn, no game change). One side set =>
+	// that side. Both set => the heavier .Weight wins; the unit wins exact ties.
+	bool ResolveConsideredBuilt(BuildingTypeExt::ExtData* pBExt, TechnoTypeExt::ExtData* pUExt)
+	{
+		bool const haveB = pBExt && pBExt->ConsideredBuilt.isset();
+		bool const haveU = pUExt && pUExt->ConsideredBuilt.isset();
+
+		if (!haveB && !haveU)
+			return false;
+		if (haveB && !haveU)
+			return pBExt->ConsideredBuilt.Get();
+		if (haveU && !haveB)
+			return pUExt->ConsideredBuilt.Get();
+
+		int const wB = pBExt->ConsideredBuiltWeight;
+		int const wU = pUExt->ConsideredBuiltWeight;
+		return (wU >= wB) ? pUExt->ConsideredBuilt.Get() : pBExt->ConsideredBuilt.Get();
 	}
 
 	// Produce our extra clones for a single primary-production event.
@@ -194,10 +235,11 @@ namespace
 				// already made from this source.
 				int const mult = EffectiveMult(pBExt, pB->Type, pExt, pType);
 				int const mine = cloneCount * mult - antaresBase;
+				bool const asBuilt = ResolveConsideredBuilt(pBExt, pExt);
 				for (int k = 0; k < mine; ++k)
 				{
 					++attempted;
-					made += KickOneClone(pB, pCloneType, pOwner) ? 1 : 0;
+					made += KickOneClone(pB, pCloneType, pOwner, asBuilt) ? 1 : 0;
 				}
 			}
 		}
@@ -207,10 +249,11 @@ namespace
 		auto const pFacExt = BuildingTypeExt::ExtMap.Find(pFactory->Type);
 		int const slotMult = pFacExt ? EffectiveMult(pFacExt, pFactory->Type, pExt, pType) : 1;
 		int const slotTotal = slotBonus * slotMult;
+		bool const slotBuilt = ResolveConsideredBuilt(pFacExt, pExt);
 		for (int k = 0; k < slotTotal; ++k)
 		{
 			++attempted;
-			made += KickOneClone(pFactory, pCloneType, pOwner) ? 1 : 0;
+			made += KickOneClone(pFactory, pCloneType, pOwner, slotBuilt) ? 1 : 0;
 		}
 
 		// Log both what we tried and what actually placed, so an off count is easy
