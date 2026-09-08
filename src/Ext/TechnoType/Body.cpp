@@ -14,7 +14,11 @@ void TechnoTypeExt::ExtData::LoadFromINIFile(CCINIClass* pINI)
 
 	INI_EX exINI(pINI);
 
-	this->CloneCount.Read(exINI, pID, "CloneCount");
+	// Base clone spec list. CloneCount is the back-compat alias for CloneAmount.
+	this->Clones.Read(exINI, pID,
+		"CloneAmount", "CloneAs", "CloneInitialStrength", "CloneInitialStrength.Min",
+		"CloneCount");
+	this->ClonedAsFallback.Read(exINI, pID, "ClonedAs");
 	this->Cloneable.Read(exINI, pID, "Cloneable");
 	this->MultBlacklist.Read(exINI, pID, "Cloning.Mult.Blacklist");
 	this->ConsideredBuilt.Read(exINI, pID, "Cloning.ConsideredBuilt");
@@ -27,10 +31,6 @@ void TechnoTypeExt::ExtData::LoadFromINIFile(CCINIClass* pINI)
 	this->Veterancy.InheritAcademy.Read(exINI, pID, "CloneVeterancy.Inherit.Academy");
 	this->Veterancy.InheritStolenTech.Read(exINI, pID, "CloneVeterancy.Inherit.StolenTech");
 	this->Veterancy.InheritCountryBonus.Read(exINI, pID, "CloneVeterancy.Inherit.CountryBonus");
-
-	// Initial strength.
-	this->Strength.Fraction.Read(exINI, pID, "CloneInitialStrength");
-	this->Strength.FractionMin.Read(exINI, pID, "CloneInitialStrength.Min");
 
 	// Prerequisite/house-gated extra slots. Count-prefixed so parsing is O(N)
 	// and a modder never has to leave gaps.
@@ -45,17 +45,6 @@ void TechnoTypeExt::ExtData::LoadFromINIFile(CCINIClass* pINI)
 		for (int i = 0; i < count; ++i)
 			this->Slots[static_cast<size_t>(i)].Read(exINI, pID, i);
 	}
-}
-
-int TechnoTypeExt::ExtData::ResolveSlotBonus(HouseClass* pHouse) const
-{
-	int bonus = 0;
-	for (auto const& slot : this->Slots)
-	{
-		if (slot.Satisfied(pHouse))
-			bonus += slot.Amount;
-	}
-	return bonus;
 }
 
 // ============================================================================

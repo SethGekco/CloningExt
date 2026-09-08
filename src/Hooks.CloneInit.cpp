@@ -74,6 +74,13 @@ DEFINE_HOOK(0x443C81, BuildingClass_KickOutUnit_CloneInit_CloningExt, 0x7)
 	GET(BuildingClass*, pBuilding, ESI);
 	GET(FootClass*, pExiting, EDI);
 
+	// Clones WE make get their per-spec HP and veterancy set in the dispatch layer
+	// (Hooks.CloneDispatch.cpp), so skip them here to avoid double-applying. This
+	// hook only handles clones we don't create: Antares'/vanilla base clones from a
+	// dedicated vat, which take the unit's FIRST base spec's settings.
+	if (CloningExt::ProducingExtras)
+		return 0;
+
 	if (!IsCloneExit(pBuilding, pExiting))
 		return 0;
 
@@ -90,12 +97,12 @@ DEFINE_HOOK(0x443C81, BuildingClass_KickOutUnit_CloneInit_CloningExt, 0x7)
 		pExiting->Veterancy.Veterancy = static_cast<float>(resolved);
 	}
 
-	// --- initial strength --------------------------------------------------
-	if (pExt->Strength.IsActive())
+	// --- initial strength (first base spec, percent) -----------------------
+	if (pExt->Clones.HasStrength())
 	{
-		double const frac = pExt->Strength.ResolveFraction();
+		double const pct = pExt->Clones.StrengthPctAt(0);
 		int const full = pType->Strength;
-		int strength = static_cast<int>(full * frac);
+		int strength = static_cast<int>(full * pct / 100.0);
 		if (strength < 1) strength = 1;
 		if (strength > full) strength = full;
 

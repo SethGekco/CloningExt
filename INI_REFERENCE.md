@@ -6,13 +6,27 @@ count/slot/veterancy features to matter. See `HOOKS_LOG.md` for why.
 
 ## TechnoType (the unit being cloned)
 
+Per-clone control uses **index-aligned lists**: entry `i` across `CloneAmount` /
+`CloneAs` / `CloneInitialStrength` defines clone-spec `i`. Shorter lists repeat
+their last entry; absent lists use defaults. Example:
+
 ```ini
 [SOMEUNIT]
-; --- how many clones each cloning source makes of this unit ---
-CloneCount=1              ; int, default 1 (=vanilla). Each cloning source makes
-                          ; EXACTLY N clones of this unit: we produce N minus
-                          ; whatever Antares already made from that source (0 when
-                          ; Antares bailed, e.g. a factory that clones itself).
+CloneAmount=1,1              ; spec 0 = 1 clone, spec 1 = 1 clone (CloneCount is an alias)
+CloneAs=GGI,GGI_REJECT       ; spec 0 comes out as GGI, spec 1 as GGI_REJECT
+CloneInitialStrength=100,50  ; spec 0 at 100% HP, spec 1 at 50% HP
+```
+
+```ini
+[SOMEUNIT]
+; --- the clone spec list (all index-aligned) ---
+CloneAmount=1             ; int list, default 1. Clones per spec, per cloning
+                          ; source. CloneCount= is a back-compat alias.
+CloneAs=                  ; TechnoType list. What each spec comes out as. Unset =
+                          ; ClonedAs= if set, else this unit. (See NACLON caveat.)
+CloneInitialStrength=100  ; percent list, default 100 (full HP).
+CloneInitialStrength.Min= ; percent list. If set, HP is a synced-RNG roll in
+                          ; [Min, CloneInitialStrength] per clone.
 Cloneable=yes             ; mirror of Antares' tag; no = our layer never clones
                           ; this unit.
 Cloning.Mult.Blacklist=   ; BuildingType list. These buildings do NOT apply their
@@ -32,18 +46,17 @@ CloneVeterancy.Inherit.Academy=yes
 CloneVeterancy.Inherit.StolenTech=yes
 CloneVeterancy.Inherit.CountryBonus=yes
 
-; --- clone initial HP ---
-CloneInitialStrength=                ; fraction 0<..<=1 of full HP on exit
-CloneInitialStrength.Min=            ; if set, HP fraction is a synced-RNG roll
-                                     ; in [Min, CloneInitialStrength]
-
 ; --- extra clone slots gated by prerequisite / country ---
 CloneSlots.Count=0                   ; how many CloneSlotN blocks follow
 CloneSlot0.Prerequisite=NAWEAP,NARADR      ; house must own ALL of these
 CloneSlot0.Prerequisite.Negative=NATECH    ; house must own NONE of these
 CloneSlot0.RequiredHouses=Americans,French ; house Country must be one of these
 CloneSlot0.ForbiddenHouses=Russians        ; house Country must NOT be one
-CloneSlot0.Amount=1                        ; extra clones when satisfied
+; each satisfied slot grants its own clone spec list (same list rules as the base):
+CloneSlot0.Amount=1                        ; int list of clones per spec
+CloneSlot0.As=                             ; TechnoType list (defaults like CloneAs)
+CloneSlot0.InitialStrength=100             ; percent list
+CloneSlot0.InitialStrength.Min=            ; percent list -> synced-RNG HP range
 ```
 
 ## BuildingType (the cloning building)

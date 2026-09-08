@@ -8,6 +8,7 @@
 
 #include <Cloning/Slot.h>
 #include <Cloning/Resolver.h>
+#include <Cloning/CloneList.h>
 
 #include <vector>
 
@@ -28,17 +29,22 @@ public:
 	class ExtData final : public Extension<TechnoTypeClass>
 	{
 	public:
-		// Clones produced per qualifying cloning source. 1 == vanilla. Values >1
-		// add (CloneCount-1) extra clones per source on top of Antares' base one.
-		Valueable<int> CloneCount { 1 };
+		// The always-on clone spec list for this unit: CloneAmount / CloneAs /
+		// CloneInitialStrength (+ .Min), index-aligned. CloneCount is a back-compat
+		// alias for CloneAmount. Empty => one full-HP clone of the produced type.
+		CloneList Clones;
+
+		// Ares/Antares ClonedAs=, read by us as the default clone TYPE when a spec's
+		// CloneAs is unset (and for the NACLON caveat -- see INI_REFERENCE.md).
+		Nullable<TechnoTypeClass*> ClonedAsFallback;
 
 		// Mirror of Antares' Cloneable=. Lets a modder suppress our extra-clone
 		// layer for a type without depending on Antares' invisible ext.
 		Valueable<bool> Cloneable { true };
 
-		// Veterancy + initial-strength resolvers (see Cloning/Resolver.h).
+		// Veterancy resolver (see Cloning/Resolver.h). HP is handled per-spec by
+		// CloneList now, not by CloneStrengthSpec.
 		CloneVeterancySpec Veterancy;
-		CloneStrengthSpec  Strength;
 
 		// Prerequisite/house-gated extra cloning slots. Count-prefixed list.
 		std::vector<CloneSlot> Slots;
@@ -56,10 +62,10 @@ public:
 
 		ExtData(TechnoTypeClass* OwnerObject)
 			: Extension<TechnoTypeClass>(OwnerObject)
-			, CloneCount { 1 }
+			, Clones {}
+			, ClonedAsFallback {}
 			, Cloneable { true }
 			, Veterancy {}
-			, Strength {}
 			, Slots {}
 			, MultBlacklist {}
 			, ConsideredBuilt {}
@@ -74,9 +80,6 @@ public:
 
 		virtual void LoadFromStream(PhobosStreamReader& Stm) override;
 		virtual void SaveToStream(PhobosStreamWriter& Stm) override;
-
-		// Total extra clones the satisfied slots grant to `pHouse` (0 if none).
-		int ResolveSlotBonus(HouseClass* pHouse) const;
 
 	private:
 		template <typename T>

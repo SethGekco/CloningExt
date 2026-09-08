@@ -12,7 +12,8 @@
 //   CloneSlotN.Prerequisite.Negative= house must own NONE of these (negative)
 //   CloneSlotN.RequiredHouses=        house Country must be one of these
 //   CloneSlotN.ForbiddenHouses=       house Country must NOT be one of these
-//   CloneSlotN.Amount=                clones granted when satisfied (default 1)
+//   CloneSlotN.Amount / .As / .InitialStrength = the per-clone spec list granted
+//                                     when satisfied (see Cloning/CloneList.h)
 //
 // Requirement semantics deliberately mirror how a modder reads them: positive
 // prerequisites are AND-combined (own every listed building), which matches the
@@ -20,6 +21,8 @@
 
 #include <Utilities/Container.h>
 #include <Utilities/TemplateDef.h>
+
+#include <Cloning/CloneList.h>
 
 #include <BuildingTypeClass.h>
 #include <HouseTypeClass.h>
@@ -34,7 +37,7 @@ struct CloneSlot
 	ValueableVector<BuildingTypeClass*> PrerequisiteNegative; // own NONE
 	ValueableVector<HouseTypeClass*>    RequiredHouses;       // Country in-list
 	ValueableVector<HouseTypeClass*>    ForbiddenHouses;      // Country not-in-list
-	Valueable<int>                      Amount { 1 };
+	CloneList                           Clones;               // what this slot grants
 
 	// Parse CloneSlot<index>.* from the given section.
 	void Read(INI_EX& exINI, const char* section, int index)
@@ -53,8 +56,12 @@ struct CloneSlot
 		_snprintf_s(key, sizeof(key), "CloneSlot%d.ForbiddenHouses", index);
 		this->ForbiddenHouses.Read(exINI, section, key);
 
-		_snprintf_s(key, sizeof(key), "CloneSlot%d.Amount", index);
-		this->Amount.Read(exINI, section, key);
+		char amountKey[0x40], asKey[0x40], strengthKey[0x40], strengthMinKey[0x40];
+		_snprintf_s(amountKey, sizeof(amountKey), "CloneSlot%d.Amount", index);
+		_snprintf_s(asKey, sizeof(asKey), "CloneSlot%d.As", index);
+		_snprintf_s(strengthKey, sizeof(strengthKey), "CloneSlot%d.InitialStrength", index);
+		_snprintf_s(strengthMinKey, sizeof(strengthMinKey), "CloneSlot%d.InitialStrength.Min", index);
+		this->Clones.Read(exINI, section, amountKey, asKey, strengthKey, strengthMinKey);
 	}
 
 	// Does the producing house satisfy every declared gate?

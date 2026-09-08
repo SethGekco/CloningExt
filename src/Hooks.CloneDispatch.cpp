@@ -1,10 +1,9 @@
-// CloningExt -- extra-clone dispatch (CloneCount + prerequisite/house slots).
+// CloningExt -- extra-clone dispatch (per-clone spec lists + prereq/house slots).
 //
-// These hooks CHAIN AFTER Antares. Antares owns the cloning dispatch and kicks
-// exactly one base clone per qualifying source; we run at the same sites, after
-// it, to add:
-//   * (CloneCount - 1) extra clones per qualifying source building, and
-//   * the extra clones granted by any satisfied prerequisite/house slot.
+// These hooks CHAIN AFTER Antares. Antares owns the cloning dispatch; we run at
+// the same sites, after it, to produce the unit's clone SPEC LIST from each
+// qualifying source (CloneAmount/CloneAs/CloneInitialStrength, times the source
+// building's Cloning.Mult), plus the specs granted by any satisfied slot.
 //
 // Hook sites (register layout VERIFIED against gamemd disassembly + Antares
 // src/Ext/TechnoType/Hooks.cpp):
@@ -21,10 +20,10 @@
 // (0x4445F0 + 6 == 0x4445F6) -- no overlap, no contention -- and fall through into
 // Antares' hook. See HOOKS_LOG.md.
 //
-// RECURSION: every clone we (or Antares) kick re-enters KickOutUnit and reaches
-// these hooks again with EDI=the clone. We only act on the PRIMARY product --
-// identified by pFactory->Factory->Object == Production -- so clones (which are
-// not in any factory) are skipped and there is no runaway.
+// RECURSION: our own extra clones re-enter KickOutUnit (when placed asBuilt) and
+// reach these hooks again. Dispatch() short-circuits on the CloningExt::Producing-
+// Extras flag, and only real production events (kicked from an infantry/unit
+// FACTORY, not a cloning vat) get here in the first place -- so no runaway.
 
 #include "CloningExt.h"
 
@@ -77,7 +76,7 @@ namespace
 		return pClone->Unlimbo(xyz, facing);
 	}
 
-	// Create and place one clone. Returns true when it ends up on the map.
+	// Place an already-created clone. Returns true when it ends up on the map.
 	//
 	// asBuilt: when true, the clone is first run through BuildingClass::KickOutUnit
 	// so co-DLLs that record production at its entry (GiftBox/Host @0x443C60) mark
@@ -85,13 +84,9 @@ namespace
 	// clone is left in limbo and we scatter it via Unlimbo -- either way the mark
 	// already happened at the entry. asBuilt=false (the default) skips KickOutUnit
 	// entirely, so with no built-detection DLL loaded the tag changes nothing.
-	bool KickOneClone(BuildingClass* pFrom, TechnoTypeClass* pCloneType,
-		HouseClass* pOwner, bool asBuilt)
+	bool PlaceClone(BuildingClass* pFrom, TechnoClass* pClone,
+		TechnoTypeClass* pCloneType, bool asBuilt)
 	{
-		auto const pClone = static_cast<TechnoClass*>(pCloneType->CreateObject(pOwner));
-		if (!pClone)
-			return false;
-
 		if (asBuilt)
 		{
 			auto const pOriginCell = MapClass::Instance.GetCellAt(pFrom->Location);
@@ -109,6 +104,34 @@ namespace
 
 		pClone->UnInit();
 		return false;
+	}
+
+	// Apply an HP percentage (100 = full) to a freshly created clone.
+	void ApplyStrengthPct(TechnoClass* pClone, TechnoTypeClass* pCloneType, double pct)
+	{
+		int const full = pCloneType->Strength;
+		int hp = static_cast<int>(full * pct / 100.0);
+		if (hp < 1) hp = 1;
+		if (hp > full) hp = full;
+		pClone->Health = hp;
+		pClone->EstimatedHealth = hp;
+	}
+
+	// Create one clone of pCloneType, apply this spec's HP + the unit's veterancy,
+	// and place it. Returns true when it lands on the map.
+	bool MakeClone(BuildingClass* pFrom, TechnoTypeClass* pCloneType, HouseClass* pOwner,
+		double hpPct, TechnoTypeExt::ExtData* pUExt, double vetSrc, bool asBuilt)
+	{
+		auto const pClone = static_cast<TechnoClass*>(pCloneType->CreateObject(pOwner));
+		if (!pClone)
+			return false;
+
+		ApplyStrengthPct(pClone, pCloneType, hpPct);
+
+		if (pUExt->Veterancy.IsActive())
+			pClone->Veterancy.Veterancy = static_cast<float>(pUExt->Veterancy.Resolve(vetSrc));
+
+		return PlaceClone(pFrom, pClone, pCloneType, asBuilt);
 	}
 
 	// The Cloning.Mult a building applies to a given unit, honouring the
@@ -169,21 +192,18 @@ namespace
 		if (!pExt || !pExt->Cloneable)
 			return;
 
-		int const cloneCount = pExt->CloneCount;
-		int const slotBonus = pExt->ResolveSlotBonus(pOwner);
-		if (cloneCount <= 0 && slotBonus <= 0)
-			return;
+		// Default clone type when a spec's CloneAs is unset: the ClonedAs fallback
+		// if the modder set it (also the NACLON caveat), else the produced unit.
+		TechnoTypeClass* const defaultAs = pExt->ClonedAsFallback.isset()
+			? pExt->ClonedAsFallback.Get() : pType;
 
-		// The clone comes out as the produced type itself. NOTE: this does not
-		// honour Antares' ClonedAs= override (which lives in Antares' ext); the
-		// base clone Antares makes still respects it, only our EXTRAS use the
-		// produced type. Documented in INI_REFERENCE.md.
-		auto const pCloneType = pType;
+		double const vetSrc = pProduction->Veterancy.Veterancy;
 
 		int made = 0;      // clones actually placed
-		int attempted = 0; // clones we tried to make (reflects CloneCount * mult + slots)
+		int attempted = 0; // clones we tried to make
 
 		bool const isInfantry = (abstract_cast<InfantryClass*>(pProduction) != nullptr);
+		bool const factoryNaval = pFactory->Type->Naval;
 
 		// Did Antares' KickOutClones bail out entirely for this production? It
 		// bails when the producing factory is itself a cloning vat, or is not an
@@ -194,75 +214,91 @@ namespace
 			|| (factoryKind != InfantryTypeClass::AbsID
 				&& factoryKind != UnitTypeClass::AbsID);
 
-		// --- per-source: top each qualifying building up to CloneCount ---
-		if (cloneCount > 0)
+		int const baseSpecs = pExt->Clones.SpecCount();
+
+		// --- base clone specs, per qualifying source building ---
+		for (auto const pB : pOwner->Buildings)
 		{
-			bool const factoryNaval = pFactory->Type->Naval;
+			if (!pB || pB->InLimbo)
+				continue;
 
-			for (auto const pB : pOwner->Buildings)
+			auto const pBExt = BuildingTypeExt::ExtMap.Find(pB->Type);
+			if (!pBExt)
+				continue;
+
+			bool isSource;
+			int antaresBase;
+			if (isInfantry)
 			{
-				if (!pB || pB->InLimbo)
-					continue;
+				// Antares infantry clones come only from vanilla Cloning= vats
+				// (and only when it didn't bail); we also treat CloningFacility=.
+				isSource = pBExt->IsCloningSource();
+				antaresBase = (!antaresBailed && pB->Type->Cloning) ? 1 : 0;
+			}
+			else
+			{
+				// Antares unit/naval clones come from CloningFacility= with a
+				// matching Naval flag.
+				bool const navalMatch = (pB->Type->Naval == factoryNaval);
+				isSource = pBExt->CloningFacility && navalMatch;
+				antaresBase = (!antaresBailed && isSource) ? 1 : 0;
+			}
 
-				auto const pBExt = BuildingTypeExt::ExtMap.Find(pB->Type);
-				if (!pBExt)
-					continue;
+			if (!isSource)
+				continue;
 
-				bool isSource;
-				int antaresBase;
-				if (isInfantry)
-				{
-					// Antares infantry clones come only from vanilla Cloning=
-					// vats (and only when it didn't bail); we additionally treat
-					// our CloningFacility= as a source.
-					isSource = pBExt->IsCloningSource();
-					antaresBase = (!antaresBailed && pB->Type->Cloning) ? 1 : 0;
-				}
-				else
-				{
-					// Antares unit/naval clones come from CloningFacility= with
-					// a matching Naval flag.
-					bool const navalMatch = (pB->Type->Naval == factoryNaval);
-					isSource = pBExt->CloningFacility && navalMatch;
-					antaresBase = (!antaresBailed && isSource) ? 1 : 0;
-				}
+			int const mult = EffectiveMult(pBExt, pB->Type, pExt, pType);
+			bool const asBuilt = ResolveConsideredBuilt(pBExt, pExt);
 
-				if (!isSource)
-					continue;
+			// Each source makes (CloneAmount[i] * Cloning.Mult) clones of spec i;
+			// Antares' one base clone counts against spec 0.
+			for (int i = 0; i < baseSpecs; ++i)
+			{
+				int amount = pExt->Clones.AmountAt(i) * mult;
+				if (i == 0)
+					amount -= antaresBase;
+				auto const pCloneType = pExt->Clones.AsAt(i, defaultAs);
 
-				// Each source makes CloneCount * this building's Cloning.Mult
-				// clones (blacklist exceptions honoured); subtract the one Antares
-				// already made from this source.
-				int const mult = EffectiveMult(pBExt, pB->Type, pExt, pType);
-				int const mine = cloneCount * mult - antaresBase;
-				bool const asBuilt = ResolveConsideredBuilt(pBExt, pExt);
-				for (int k = 0; k < mine; ++k)
+				for (int k = 0; k < amount; ++k)
 				{
 					++attempted;
-					made += KickOneClone(pB, pCloneType, pOwner, asBuilt) ? 1 : 0;
+					double const hp = pExt->Clones.StrengthPctAt(i);
+					made += MakeClone(pB, pCloneType, pOwner, hp, pExt, vetSrc, asBuilt) ? 1 : 0;
 				}
 			}
 		}
 
-		// --- slot bonus: additive extra clones, kicked from the factory. These
-		// scale by the producing building's Cloning.Mult too (same blacklist rule).
+		// --- slot clone specs, kicked from the producing factory ---
 		auto const pFacExt = BuildingTypeExt::ExtMap.Find(pFactory->Type);
 		int const slotMult = pFacExt ? EffectiveMult(pFacExt, pFactory->Type, pExt, pType) : 1;
-		int const slotTotal = slotBonus * slotMult;
 		bool const slotBuilt = ResolveConsideredBuilt(pFacExt, pExt);
-		for (int k = 0; k < slotTotal; ++k)
+
+		for (auto const& slot : pExt->Slots)
 		{
-			++attempted;
-			made += KickOneClone(pFactory, pCloneType, pOwner, slotBuilt) ? 1 : 0;
+			if (!slot.Satisfied(pOwner))
+				continue;
+
+			int const specs = slot.Clones.SpecCount();
+			for (int j = 0; j < specs; ++j)
+			{
+				int const amount = slot.Clones.AmountAt(j) * slotMult;
+				auto const pCloneType = slot.Clones.AsAt(j, defaultAs);
+
+				for (int k = 0; k < amount; ++k)
+				{
+					++attempted;
+					double const hp = slot.Clones.StrengthPctAt(j);
+					made += MakeClone(pFactory, pCloneType, pOwner, hp, pExt, vetSrc, slotBuilt) ? 1 : 0;
+				}
+			}
 		}
 
-		// Log both what we tried and what actually placed, so an off count is easy
-		// to diagnose (attempted<expected => tag/mult not read; made<attempted =>
-		// placement failed).
+		// Log what we tried vs what placed so off counts are easy to diagnose
+		// (attempted<expected => tag/mult not read; made<attempted => placement).
 		if (attempted > 0)
-			Debug::Log("[CloningExt] %s from %s: made %d/%d (bailed=%d, count=%d, slots=%d)\n",
+			Debug::Log("[CloningExt] %s from %s: made %d/%d (bailed=%d, specs=%d)\n",
 				pType->ID, pFactory->Type->ID, made, attempted,
-				antaresBailed ? 1 : 0, cloneCount, slotTotal);
+				antaresBailed ? 1 : 0, baseSpecs);
 	}
 
 	// A genuine production event kicks the unit out of a real infantry/unit
