@@ -126,12 +126,19 @@ namespace
 		if (!pClone)
 			return false;
 
+		if (!PlaceClone(pFrom, pClone, pCloneType, asBuilt))
+			return false;
+
+		// Apply HP/veterancy AFTER placement. The ConsideredBuilt path routes the
+		// clone through KickOutUnit, which re-initialises its health to full while
+		// exiting -- setting HP beforehand was being clobbered (the "clones come out
+		// full health" bug). Post-placement the value sticks.
 		ApplyStrengthPct(pClone, pCloneType, hpPct);
 
 		if (pUExt->Veterancy.IsActive())
 			pClone->Veterancy.Veterancy = static_cast<float>(pUExt->Veterancy.Resolve(vetSrc));
 
-		return PlaceClone(pFrom, pClone, pCloneType, asBuilt);
+		return true;
 	}
 
 	// The Cloning.Mult a building applies to a given unit, honouring the
