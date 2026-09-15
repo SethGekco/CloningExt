@@ -17,7 +17,7 @@ void TechnoTypeExt::ExtData::LoadFromINIFile(CCINIClass* pINI)
 	// Base clone spec list. CloneCount is the back-compat alias for CloneAmount.
 	this->Clones.Read(exINI, pID,
 		"CloneAmount", "CloneAs", "CloneInitialStrength", "CloneInitialStrength.Min",
-		"CloneCount");
+		"CloneChance", "CloneAs.LowPower", "CloneCount");
 	this->ClonedAsFallback.Read(exINI, pID, "ClonedAs");
 	this->ClonedAt.Read(exINI, pID, "ClonedAt");
 	this->Cloneable.Read(exINI, pID, "Cloneable");

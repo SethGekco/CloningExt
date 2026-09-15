@@ -32,6 +32,12 @@ ClonedAt=                 ; BuildingType list (Ares/Antares tag, read by us). Th
 CloneInitialStrength=100  ; percent list, default 100 (full HP).
 CloneInitialStrength.Min= ; percent list. If set, HP is a synced-RNG roll in
                           ; [Min, CloneInitialStrength] per clone.
+CloneChance=100           ; percent list, default 100. Per-clone synced-RNG spawn
+                          ; chance for each spec (100=always, 50=coin-flip each).
+CloneAs.LowPower=         ; TechnoType list. When the OWNER is in low power, spec i
+                          ; comes out as this "defect" type instead of CloneAs (bake
+                          ; the AttachEffect debuffs into that type's INI). Unset =
+                          ; no change. Same idea per slot: CloneSlotN.As.LowPower.
 Cloneable=yes             ; mirror of Antares' tag; no = our layer never clones
                           ; this unit.
 Cloning.Mult.Blacklist=   ; BuildingType list. These buildings do NOT apply their
@@ -62,6 +68,8 @@ CloneSlot0.Amount=1                        ; int list of clones per spec
 CloneSlot0.As=                             ; TechnoType list (defaults like CloneAs)
 CloneSlot0.InitialStrength=100             ; percent list
 CloneSlot0.InitialStrength.Min=            ; percent list -> synced-RNG HP range
+CloneSlot0.Chance=100                      ; percent list, per-clone spawn chance
+CloneSlot0.As.LowPower=                    ; TechnoType list, defect type on low power
 ```
 
 ## BuildingType (the cloning building)

@@ -227,6 +227,9 @@ namespace
 		bool const isInfantry = (abstract_cast<InfantryClass*>(pProduction) != nullptr);
 		bool const factoryNaval = pFactory->Type->Naval;
 
+		// Owner power state drives the CloneAs.LowPower defect-type swap.
+		bool const lowPower = pOwner->HasLowPower();
+
 		// Did Antares' KickOutClones bail out entirely for this production? It
 		// bails when the producing factory is itself a cloning vat, or is not an
 		// infantry/unit factory (mirrors Antares Body.cpp:1140). When it bails it
@@ -292,10 +295,12 @@ namespace
 				int amount = pExt->Clones.AmountAt(i) * mult;
 				if (i == 0)
 					amount -= antaresBase;
-				auto const pCloneType = pExt->Clones.AsAt(i, defaultAs);
+				auto const pCloneType = pExt->Clones.AsAt(i, defaultAs, lowPower);
 
 				for (int k = 0; k < amount; ++k)
 				{
+					if (!pExt->Clones.RollChanceAt(i))
+						continue; // CloneChance says this one didn't spawn
 					++attempted;
 					double const hp = pExt->Clones.StrengthPctAt(i);
 					made += MakeClone(pB, pCloneType, pOwner, hp, pExt, vetSrc, asBuilt) ? 1 : 0;
@@ -317,10 +322,12 @@ namespace
 			for (int j = 0; j < specs; ++j)
 			{
 				int const amount = slot.Clones.AmountAt(j) * slotMult;
-				auto const pCloneType = slot.Clones.AsAt(j, defaultAs);
+				auto const pCloneType = slot.Clones.AsAt(j, defaultAs, lowPower);
 
 				for (int k = 0; k < amount; ++k)
 				{
+					if (!slot.Clones.RollChanceAt(j))
+						continue; // CloneSlotN.Chance says this one didn't spawn
 					++attempted;
 					double const hp = slot.Clones.StrengthPctAt(j);
 					made += MakeClone(pFactory, pCloneType, pOwner, hp, pExt, vetSrc, slotBuilt) ? 1 : 0;

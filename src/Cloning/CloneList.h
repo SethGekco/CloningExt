@@ -25,12 +25,17 @@ struct CloneList
 	ValueableVector<TechnoTypeClass*> As;
 	ValueableVector<double> InitialStrength;    // percent (100 = full)
 	ValueableVector<double> InitialStrengthMin; // percent; if set, HP rolls [Min, Strength]
+	ValueableVector<double> Chance;             // percent per-clone spawn chance (default 100)
+	ValueableVector<TechnoTypeClass*> AsLowPower; // alt type used when owner power is low
 
-	// Read the four lists. amountAliasKey (optional) is read BEFORE amountKey so the
+	// Read the lists. amountAliasKey (optional) is read BEFORE amountKey so the
 	// primary key overrides it -- used for the CloneCount -> CloneAmount alias.
+	// The <base>.Chance and <base>As.LowPower keys are derived from asKey's prefix by
+	// the caller and passed in.
 	void Read(INI_EX& exINI, const char* section,
 		const char* amountKey, const char* asKey,
 		const char* strengthKey, const char* strengthMinKey,
+		const char* chanceKey, const char* asLowPowerKey,
 		const char* amountAliasKey = nullptr)
 	{
 		if (amountAliasKey)
@@ -39,6 +44,10 @@ struct CloneList
 		this->As.Read(exINI, section, asKey);
 		this->InitialStrength.Read(exINI, section, strengthKey);
 		this->InitialStrengthMin.Read(exINI, section, strengthMinKey);
+		if (chanceKey)
+			this->Chance.Read(exINI, section, chanceKey);
+		if (asLowPowerKey)
+			this->AsLowPower.Read(exINI, section, asLowPowerKey);
 	}
 
 	bool Empty() const
@@ -73,13 +82,39 @@ struct CloneList
 			: this->Amount.back();
 	}
 
-	TechnoTypeClass* AsAt(int i, TechnoTypeClass* def) const
+	// Clone type for spec i. When lowPower is true and an As.LowPower entry exists,
+	// the low-power (defect) type is used instead; otherwise the normal type, else def.
+	TechnoTypeClass* AsAt(int i, TechnoTypeClass* def, bool lowPower = false) const
 	{
+		if (lowPower && !this->AsLowPower.empty())
+		{
+			return (i < static_cast<int>(this->AsLowPower.size()))
+				? this->AsLowPower[static_cast<size_t>(i)]
+				: this->AsLowPower.back();
+		}
 		if (this->As.empty())
 			return def;
 		return (i < static_cast<int>(this->As.size()))
 			? this->As[static_cast<size_t>(i)]
 			: this->As.back();
+	}
+
+	// Per-clone spawn chance for spec i as a percent (default 100 = always).
+	double ChancePctAt(int i) const
+	{
+		return ValueAt(this->Chance, i, 100.0);
+	}
+
+	// Roll whether one clone of spec i should spawn. No RNG is consumed when the
+	// chance is >= 100 (the common case), keeping default behaviour deterministic.
+	bool RollChanceAt(int i) const
+	{
+		double const pct = ChancePctAt(i);
+		if (pct >= 100.0)
+			return true;
+		if (pct <= 0.0)
+			return false;
+		return ScenarioClass::Instance->Random.RandomRanged(1, 100) <= static_cast<int>(pct);
 	}
 
 	// HP percent for spec i, rolling the synced RNG when a Min is present.
