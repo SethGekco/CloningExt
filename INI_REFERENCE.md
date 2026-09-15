@@ -24,6 +24,11 @@ CloneAmount=1             ; int list, default 1. Clones per spec, per cloning
                           ; source. CloneCount= is a back-compat alias.
 CloneAs=                  ; TechnoType list. What each spec comes out as. Unset =
                           ; ClonedAs= if set, else this unit. (See NACLON caveat.)
+ClonedAt=                 ; BuildingType list (Ares/Antares tag, read by us). The
+                          ; EXCLUSIVE set of buildings that clone this unit --
+                          ; overrides the Cloning=/CloningFacility= source search,
+                          ; so a unit can be cloned only at named buildings without
+                          ; flagging them as vats. Empty = normal source search.
 CloneInitialStrength=100  ; percent list, default 100 (full HP).
 CloneInitialStrength.Min= ; percent list. If set, HP is a synced-RNG roll in
                           ; [Min, CloneInitialStrength] per clone.

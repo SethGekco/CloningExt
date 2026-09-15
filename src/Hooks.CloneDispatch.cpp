@@ -238,6 +238,11 @@ namespace
 
 		int const baseSpecs = pExt->Clones.SpecCount();
 
+		// When the unit sets ClonedAt=, that list is the EXCLUSIVE source set
+		// (mirrors Antares): clone only at those buildings, ignoring the
+		// Cloning=/CloningFacility= search.
+		bool const hasClonedAt = !pExt->ClonedAt.empty();
+
 		// --- base clone specs, per qualifying source building ---
 		for (auto const pB : pOwner->Buildings)
 		{
@@ -250,7 +255,15 @@ namespace
 
 			bool isSource;
 			int antaresBase;
-			if (isInfantry)
+			if (hasClonedAt)
+			{
+				// Explicit per-unit source list. Antares clones 1 from each owned
+				// ClonedAt building (when it did not bail), regardless of that
+				// building's own cloning flags.
+				isSource = pExt->ClonedAt.Contains(pB->Type);
+				antaresBase = (!antaresBailed && isSource) ? 1 : 0;
+			}
+			else if (isInfantry)
 			{
 				// Antares infantry clones come only from vanilla Cloning= vats
 				// (and only when it didn't bail); we also treat CloningFacility=.

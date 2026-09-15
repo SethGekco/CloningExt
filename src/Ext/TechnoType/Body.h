@@ -38,6 +38,13 @@ public:
 		// CloneAs is unset (and for the NACLON caveat -- see INI_REFERENCE.md).
 		Nullable<TechnoTypeClass*> ClonedAsFallback;
 
+		// Ares/Antares ClonedAt=, hijacked by us: the exact buildings that clone
+		// this unit. When non-empty it REPLACES the Cloning=/CloningFacility= source
+		// search (exclusive, mirroring Antares), so a unit can be cloned at specific
+		// buildings without those buildings being flagged cloning vats. Empty => use
+		// the normal cloning-source enumeration.
+		ValueableVector<BuildingTypeClass*> ClonedAt;
+
 		// Mirror of Antares' Cloneable=. Lets a modder suppress our extra-clone
 		// layer for a type without depending on Antares' invisible ext.
 		Valueable<bool> Cloneable { true };
@@ -64,6 +71,7 @@ public:
 			: Extension<TechnoTypeClass>(OwnerObject)
 			, Clones {}
 			, ClonedAsFallback {}
+			, ClonedAt {}
 			, Cloneable { true }
 			, Veterancy {}
 			, Slots {}

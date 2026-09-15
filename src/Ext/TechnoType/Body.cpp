@@ -19,6 +19,7 @@ void TechnoTypeExt::ExtData::LoadFromINIFile(CCINIClass* pINI)
 		"CloneAmount", "CloneAs", "CloneInitialStrength", "CloneInitialStrength.Min",
 		"CloneCount");
 	this->ClonedAsFallback.Read(exINI, pID, "ClonedAs");
+	this->ClonedAt.Read(exINI, pID, "ClonedAt");
 	this->Cloneable.Read(exINI, pID, "Cloneable");
 	this->MultBlacklist.Read(exINI, pID, "Cloning.Mult.Blacklist");
 	this->ConsideredBuilt.Read(exINI, pID, "Cloning.ConsideredBuilt");
