@@ -30,6 +30,7 @@
 #include <Ext/TechnoType/Body.h>
 #include <Ext/BuildingType/Body.h>
 #include <Ext/House/Body.h>
+#include <Ext/Building/Body.h>
 
 #include <Utilities/Macro.h>
 
@@ -222,25 +223,29 @@ namespace
 	// scope (Global vs Universal) resolves independently; when both are set the
 	// higher resulting index wins (whichever escalation is further along). No scope
 	// configured -> the starting index.
-	int ResolveVatIndex(BuildingTypeExt::ExtData* pBExt, int houseCount, int universalCount)
+	int ResolveVatIndex(BuildingTypeExt::ExtData* pBExt,
+		int houseCount, int universalCount, int localCount)
 	{
 		int const start = pBExt->EscalateStartIndex.Get(0);
 		int idx = start;
 		bool have = false;
 
+		auto consider = [&](int candidate)
+		{
+			idx = have ? std::max(idx, candidate) : candidate;
+			have = true;
+		};
+
 		if (!pBExt->EscalateGlobalCount.empty())
-		{
-			idx = ResolveEscalateIndex(start, pBExt->EscalateGlobalCount,
-				pBExt->EscalateGlobalIndex, houseCount);
-			have = true;
-		}
+			consider(ResolveEscalateIndex(start, pBExt->EscalateGlobalCount,
+				pBExt->EscalateGlobalIndex, houseCount));
 		if (!pBExt->EscalateUniversalCount.empty())
-		{
-			int const u = ResolveEscalateIndex(start, pBExt->EscalateUniversalCount,
-				pBExt->EscalateUniversalIndex, universalCount);
-			idx = have ? std::max(idx, u) : u;
-			have = true;
-		}
+			consider(ResolveEscalateIndex(start, pBExt->EscalateUniversalCount,
+				pBExt->EscalateUniversalIndex, universalCount));
+		if (!pBExt->EscalateLocalCount.empty())
+			consider(ResolveEscalateIndex(start, pBExt->EscalateLocalCount,
+				pBExt->EscalateLocalIndex, localCount));
+
 		return idx;
 	}
 
@@ -373,13 +378,23 @@ namespace
 			int const mult = EffectiveMult(pBExt, pB->Type, pExt, pType);
 			bool const asBuilt = ResolveConsideredBuilt(pBExt, pExt);
 
+			// Per-instance local count for THIS vat (snapshot; incremented below).
+			BuildingExt::ExtData* pBInst = nullptr;
+			int localCount = 0;
+			if (hasLadder && unitIndex >= 0 && !pBExt->EscalateLocalCount.empty())
+			{
+				pBInst = BuildingExt::ExtMap.Find(pB);
+				if (pBInst)
+					localCount = pBInst->GetLocalCount(unitIndex);
+			}
+
 			// Escalation: a configured vat swaps the DEFAULT clone type to its
-			// current ladder entry (Global and/or Universal scope). Non-configured
-			// vats keep the normal default but still feed the counter below.
+			// current ladder entry (Local/Global/Universal). Non-configured vats keep
+			// the normal default but still feed the counters below.
 			TechnoTypeClass* srcDefaultAs = defaultAs;
 			if (hasLadder && pBExt->HasEscalation())
 			{
-				int const idx = ResolveVatIndex(pBExt, escCount, universalCount);
+				int const idx = ResolveVatIndex(pBExt, escCount, universalCount, localCount);
 				if (auto const pLadderType = LadderTypeAt(pExt, idx))
 					srcDefaultAs = pLadderType; // null entry -> keep normal default
 			}
@@ -405,10 +420,16 @@ namespace
 				}
 			}
 
-			// Feed the global escalation counter: every source contributes when the
-			// unit has a ladder. CountMultiples decides batch = +N vs +1.
+			// Feed the counters: the per-house tally (Global + Universal) gets every
+			// source; the per-vat tally gets THIS building's own clones. Each uses
+			// its own CountMultiples (batch = +N vs +1).
 			if (hasLadder && clonesFromSource > 0)
+			{
 				escIncrement += pBExt->EscalateGlobalCountMultiples ? clonesFromSource : 1;
+				if (pBInst)
+					pBInst->AddLocalCount(unitIndex,
+						pBExt->EscalateLocalCountMultiples ? clonesFromSource : 1);
+			}
 		}
 
 		// --- slot clone specs, kicked from the producing factory ---
@@ -418,10 +439,19 @@ namespace
 
 		// Slot clones follow the producing factory's escalation (if it is a
 		// configured vat) for their default type, same as base clones.
+		BuildingExt::ExtData* pFacInst = nullptr;
+		int factoryLocalCount = 0;
+		if (hasLadder && pFacExt && unitIndex >= 0 && !pFacExt->EscalateLocalCount.empty())
+		{
+			pFacInst = BuildingExt::ExtMap.Find(pFactory);
+			if (pFacInst)
+				factoryLocalCount = pFacInst->GetLocalCount(unitIndex);
+		}
+
 		TechnoTypeClass* slotDefaultAs = defaultAs;
 		if (hasLadder && pFacExt && pFacExt->HasEscalation())
 		{
-			int const idx = ResolveVatIndex(pFacExt, escCount, universalCount);
+			int const idx = ResolveVatIndex(pFacExt, escCount, universalCount, factoryLocalCount);
 			if (auto const pLadderType = LadderTypeAt(pExt, idx))
 				slotDefaultAs = pLadderType;
 		}
@@ -450,7 +480,12 @@ namespace
 			}
 		}
 		if (hasLadder && clonesFromSlots > 0 && pFacExt)
+		{
 			escIncrement += pFacExt->EscalateGlobalCountMultiples ? clonesFromSlots : 1;
+			if (pFacInst)
+				pFacInst->AddLocalCount(unitIndex,
+					pFacExt->EscalateLocalCountMultiples ? clonesFromSlots : 1);
+		}
 
 		// Commit the escalation counter for this production (snapshot-then-add, so
 		// all sources in one event used the same index above).

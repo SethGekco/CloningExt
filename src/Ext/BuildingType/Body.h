@@ -73,12 +73,20 @@ public:
 		ValueableVector<int> EscalateUniversalCount;  // Clone.Escalate.Universal.Count
 		ValueableVector<int> EscalateUniversalIndex;  // Clone.Escalate.Universal.Index
 
+		// Local scope: evaluated against THIS building instance's own count (stored
+		// per-instance in BuildingExt). Its own CountMultiples since the count is a
+		// separate store.
+		ValueableVector<int> EscalateLocalCount;      // Clone.Escalate.Local.Count
+		ValueableVector<int> EscalateLocalIndex;      // Clone.Escalate.Local.Index
+		Valueable<bool> EscalateLocalCountMultiples;  // Clone.Escalate.Local.CountMultiples
+
 		// Is this building escalation-configured (uses the ladder for output)?
 		bool HasEscalation() const
 		{
 			return this->EscalateStartIndex.isset()
 				|| !this->EscalateGlobalCount.empty()
-				|| !this->EscalateUniversalCount.empty();
+				|| !this->EscalateUniversalCount.empty()
+				|| !this->EscalateLocalCount.empty();
 		}
 
 		ExtData(BuildingTypeClass* OwnerObject)
@@ -95,6 +103,9 @@ public:
 			, EscalateGlobalCountMultiples { true }
 			, EscalateUniversalCount {}
 			, EscalateUniversalIndex {}
+			, EscalateLocalCount {}
+			, EscalateLocalIndex {}
+			, EscalateLocalCountMultiples { true }
 		{ }
 
 		virtual ~ExtData() = default;

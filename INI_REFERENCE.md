@@ -119,7 +119,7 @@ unit rather than being placed silently.
 The vanilla `Cloning=yes` (Cloning Vats) flag is honoured directly — no extra tag
 needed for classic infantry cloning.
 
-## Clone escalation (Global + Universal scopes)
+## Clone escalation (Local + Global + Universal scopes)
 
 Cloning a unit repeatedly walks its clones along a variant ladder. Full design in
 [docs/DESIGN.CloneEscalation.md](docs/DESIGN.CloneEscalation.md).
@@ -155,10 +155,17 @@ counts — whoever mass-clones first escalates the unit for everyone.
 Clone.Escalate.Universal.Count=50   ; world-wide total across all players
 Clone.Escalate.Universal.Index=3
 ```
-If a vat sets both Global and Universal, the higher resulting index wins. Universal
-is derived from the per-house tally, so it shares `Clone.Escalate.Global.CountMultiples`
-(no separate Universal multiples control). *Local (per-vat) scope is still Phase 2 —
-see the design doc.*
+**Local scope (per-vat):** evaluated against THIS building instance's own count.
+```ini
+[GADRAFT]
+Clone.Escalate.Local.Count=5,10,15
+Clone.Escalate.Local.Index=1,2,3
+Clone.Escalate.Local.CountMultiples=no   ; a batch counts as +1 for this vat
+```
+Any scope a vat configures is resolved independently and the **higher resulting
+index wins**. Local has its own `CountMultiples` (separate per-instance store);
+Universal shares Global's (it is derived from the per-house tally). All three
+counters are serialized (save/load-safe) and MP-sync-safe.
 
 ## Known limitations (this build)
 

@@ -87,10 +87,11 @@ CloningExt is **decoupled but pairs with** the INI inheritance extension:
 * Requirement regardless: ladder variants must be **registered TechnoTypes**; the
   inheritance ext should handle registration, and CloningExt reads refs afterward.
 
-## Phases
-1. **Global** (this build) — HouseExt counter, ladder parse, index resolution, dispatch wiring.
-2. **Universal** — one scenario-global counter + global save hook (the "race").
-3. **Local** — per-instance BuildingExt counter (heaviest new container).
+## Phases — ALL BUILT
+1. **Global** ✅ — HouseExt counter, ladder parse, index resolution, dispatch wiring.
+2. **Universal** ✅ — no separate store; sum of every house's per-type tally (the "race").
+3. **Local** ✅ — per-instance BuildingExt counter (canary 0x0C10E004), serialized in
+   the building stream; own `CountMultiples`.
 
 ## Open decisions (defaults chosen)
 * Multi-scope precedence → **higher resolved index wins**.

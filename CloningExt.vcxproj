@@ -32,6 +32,7 @@
     <ClCompile Include="src\Ext\TechnoType\Body.cpp" />
     <ClCompile Include="src\Ext\BuildingType\Body.cpp" />
     <ClCompile Include="src\Ext\House\Body.cpp" />
+    <ClCompile Include="src\Ext\Building\Body.cpp" />
     <!-- Feature hooks -->
     <ClCompile Include="src\Hooks.CloneInit.cpp" />
     <ClCompile Include="src\Hooks.CloneDispatch.cpp" />
@@ -46,6 +47,7 @@
     <ClInclude Include="src\Ext\TechnoType\Body.h" />
     <ClInclude Include="src\Ext\BuildingType\Body.h" />
     <ClInclude Include="src\Ext\House\Body.h" />
+    <ClInclude Include="src\Ext\Building\Body.h" />
   </ItemGroup>
 
   <PropertyGroup Label="Globals">
