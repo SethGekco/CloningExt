@@ -2,6 +2,8 @@
 
 #include <Utilities/Macro.h>
 
+#include <cstdio>
+
 TechnoTypeExt::ExtContainer TechnoTypeExt::ExtMap;
 
 // ============================================================================
@@ -21,6 +23,23 @@ void TechnoTypeExt::ExtData::LoadFromINIFile(CCINIClass* pINI)
 	this->ClonedAsFallback.Read(exINI, pID, "ClonedAs");
 	this->ClonedAt.Read(exINI, pID, "ClonedAt");
 	this->Cloneable.Read(exINI, pID, "Cloneable");
+
+	// Escalation ladder: scan Clone.Escalate[0..] until the first missing index.
+	this->EscalateLadder.clear();
+	{
+		char key[0x30];
+		char buf[0x80];
+		for (int i = 0; i < 64; ++i)
+		{
+			_snprintf_s(key, sizeof(key), "Clone.Escalate[%d]", i);
+			if (pINI->ReadString(pID, key, "", buf, sizeof(buf)) <= 0)
+				break; // first gap ends the ladder
+
+			Nullable<TechnoTypeClass*> entry;
+			entry.Read(exINI, pID, key);
+			this->EscalateLadder.push_back(entry.isset() ? entry.Get() : nullptr);
+		}
+	}
 	this->MultBlacklist.Read(exINI, pID, "Cloning.Mult.Blacklist");
 	this->ConsideredBuilt.Read(exINI, pID, "Cloning.ConsideredBuilt");
 	this->ConsideredBuiltWeight.Read(exINI, pID, "Cloning.ConsideredBuilt.Weight");

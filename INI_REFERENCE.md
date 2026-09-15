@@ -119,6 +119,36 @@ unit rather than being placed silently.
 The vanilla `Cloning=yes` (Cloning Vats) flag is honoured directly — no extra tag
 needed for classic infantry cloning.
 
+## Clone escalation (Global scope — Phase 1)
+
+Cloning a unit repeatedly walks its clones along a variant ladder. Full design in
+[docs/DESIGN.CloneEscalation.md](docs/DESIGN.CloneEscalation.md).
+
+Unit — the ladder (scanned until the first gap; entries are real TechnoTypes,
+normally authored as inheritances of the base):
+```ini
+[GGI]
+Clone.Escalate[0]=GGI_Superior
+Clone.Escalate[1]=GGI_Standard
+Clone.Escalate[2]=GGI_Inferior
+Clone.Escalate[3]=GGI_Sludge
+```
+
+Building (cloning vat) — the per-house counter that picks the index:
+```ini
+[NACLON]
+Clone.Escalate.Index=0                    ; index before any threshold (default 0)
+Clone.Escalate.Global.Count=5,10,15,50    ; ascending thresholds (per-house count)
+Clone.Escalate.Global.Index=1,2,3,0       ; index used once each threshold is passed
+Clone.Escalate.Global.CountMultiples=yes  ; batch of N counts as +N (yes) or +1 (no)
+```
+The active index = the `Index[]` of the highest passed `Count[]` (else the starting
+index); it selects `Clone.Escalate[index]` as the default clone type. Unresolved
+ladder entries fall back to the produced type (safe without the inheritance ext).
+Every cloning source feeds the counter; escalation-configured vats also change
+their output. *Local (per-vat) and Universal (all-players race) scopes are Phase
+2/1.5 — see the design doc.*
+
 ## Known limitations (this build)
 
 * **`CloneCount=0` suppression is partial.** Where Antares bailed (a factory

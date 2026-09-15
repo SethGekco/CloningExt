@@ -29,6 +29,7 @@
 
 #include <Ext/TechnoType/Body.h>
 #include <Ext/BuildingType/Body.h>
+#include <Ext/House/Body.h>
 
 #include <Utilities/Macro.h>
 
@@ -195,6 +196,26 @@ namespace
 		return (wU >= wB) ? pUExt->ConsideredBuilt.Get() : pBExt->ConsideredBuilt.Get();
 	}
 
+	// Resolve a ladder index from a counter value: the Index[] entry for the
+	// highest Count[] threshold that `count` has passed, else startIndex. Robust to
+	// unsorted thresholds (takes the entry of the greatest passed threshold).
+	int ResolveEscalateIndex(int startIndex,
+		ValueableVector<int> const& counts, ValueableVector<int> const& indices, int count)
+	{
+		int best = startIndex;
+		int bestThreshold = -1;
+		for (size_t k = 0; k < counts.size(); ++k)
+		{
+			int const threshold = counts[k];
+			if (count >= threshold && threshold > bestThreshold)
+			{
+				bestThreshold = threshold;
+				best = (k < indices.size()) ? indices[k] : startIndex;
+			}
+		}
+		return best;
+	}
+
 	// Produce our extra clones for a single primary-production event.
 	//
 	// Target semantics: each cloning-source building makes EXACTLY CloneCount
@@ -229,6 +250,16 @@ namespace
 
 		// Owner power state drives the CloneAs.LowPower defect-type swap.
 		bool const lowPower = pOwner->HasLowPower();
+
+		// Clone escalation (Global scope): only tracked/applied for units that
+		// define a ladder. The house-wide count is snapshotted here so every source
+		// in this one production sees the same index; increments apply at the end.
+		bool const hasLadder = !pExt->EscalateLadder.empty();
+		int const unitIndex = TechnoTypeClass::Array.FindItemIndex(pType);
+		auto const pHouseExt = HouseExt::ExtMap.Find(pOwner);
+		int const escCount = (hasLadder && pHouseExt && unitIndex >= 0)
+			? pHouseExt->GetEscalationCount(unitIndex) : 0;
+		int escIncrement = 0;
 
 		// Did Antares' KickOutClones bail out entirely for this production? It
 		// bails when the producing factory is itself a cloning vat, or is not an
@@ -288,24 +319,47 @@ namespace
 			int const mult = EffectiveMult(pBExt, pB->Type, pExt, pType);
 			bool const asBuilt = ResolveConsideredBuilt(pBExt, pExt);
 
+			// Escalation: a configured vat swaps the DEFAULT clone type to its
+			// current ladder entry. Non-configured vats keep the normal default but
+			// still feed the counter below.
+			TechnoTypeClass* srcDefaultAs = defaultAs;
+			if (hasLadder && pBExt->HasEscalation())
+			{
+				int idx = ResolveEscalateIndex(pBExt->EscalateStartIndex.Get(0),
+					pBExt->EscalateGlobalCount, pBExt->EscalateGlobalIndex, escCount);
+				if (idx < 0)
+					idx = 0;
+				if (idx >= static_cast<int>(pExt->EscalateLadder.size()))
+					idx = static_cast<int>(pExt->EscalateLadder.size()) - 1;
+				if (auto const pLadderType = pExt->EscalateLadder[static_cast<size_t>(idx)])
+					srcDefaultAs = pLadderType; // null entry -> keep normal default
+			}
+
 			// Each source makes (CloneAmount[i] * Cloning.Mult) clones of spec i;
 			// Antares' one base clone counts against spec 0.
+			int clonesFromSource = 0;
 			for (int i = 0; i < baseSpecs; ++i)
 			{
 				int amount = pExt->Clones.AmountAt(i) * mult;
 				if (i == 0)
 					amount -= antaresBase;
-				auto const pCloneType = pExt->Clones.AsAt(i, defaultAs, lowPower);
+				auto const pCloneType = pExt->Clones.AsAt(i, srcDefaultAs, lowPower);
 
 				for (int k = 0; k < amount; ++k)
 				{
 					if (!pExt->Clones.RollChanceAt(i))
 						continue; // CloneChance says this one didn't spawn
 					++attempted;
+					++clonesFromSource;
 					double const hp = pExt->Clones.StrengthPctAt(i);
 					made += MakeClone(pB, pCloneType, pOwner, hp, pExt, vetSrc, asBuilt) ? 1 : 0;
 				}
 			}
+
+			// Feed the global escalation counter: every source contributes when the
+			// unit has a ladder. CountMultiples decides batch = +N vs +1.
+			if (hasLadder && clonesFromSource > 0)
+				escIncrement += pBExt->EscalateGlobalCountMultiples ? clonesFromSource : 1;
 		}
 
 		// --- slot clone specs, kicked from the producing factory ---
@@ -313,6 +367,22 @@ namespace
 		int const slotMult = pFacExt ? EffectiveSlotMult(pFacExt, pFactory->Type, pExt, pType) : 1;
 		bool const slotBuilt = ResolveConsideredBuilt(pFacExt, pExt);
 
+		// Slot clones follow the producing factory's escalation (if it is a
+		// configured vat) for their default type, same as base clones.
+		TechnoTypeClass* slotDefaultAs = defaultAs;
+		if (hasLadder && pFacExt && pFacExt->HasEscalation())
+		{
+			int idx = ResolveEscalateIndex(pFacExt->EscalateStartIndex.Get(0),
+				pFacExt->EscalateGlobalCount, pFacExt->EscalateGlobalIndex, escCount);
+			if (idx < 0)
+				idx = 0;
+			if (idx >= static_cast<int>(pExt->EscalateLadder.size()))
+				idx = static_cast<int>(pExt->EscalateLadder.size()) - 1;
+			if (auto const pLadderType = pExt->EscalateLadder[static_cast<size_t>(idx)])
+				slotDefaultAs = pLadderType;
+		}
+
+		int clonesFromSlots = 0;
 		for (auto const& slot : pExt->Slots)
 		{
 			if (!slot.Satisfied(pOwner))
@@ -322,25 +392,33 @@ namespace
 			for (int j = 0; j < specs; ++j)
 			{
 				int const amount = slot.Clones.AmountAt(j) * slotMult;
-				auto const pCloneType = slot.Clones.AsAt(j, defaultAs, lowPower);
+				auto const pCloneType = slot.Clones.AsAt(j, slotDefaultAs, lowPower);
 
 				for (int k = 0; k < amount; ++k)
 				{
 					if (!slot.Clones.RollChanceAt(j))
 						continue; // CloneSlotN.Chance says this one didn't spawn
 					++attempted;
+					++clonesFromSlots;
 					double const hp = slot.Clones.StrengthPctAt(j);
 					made += MakeClone(pFactory, pCloneType, pOwner, hp, pExt, vetSrc, slotBuilt) ? 1 : 0;
 				}
 			}
 		}
+		if (hasLadder && clonesFromSlots > 0 && pFacExt)
+			escIncrement += pFacExt->EscalateGlobalCountMultiples ? clonesFromSlots : 1;
+
+		// Commit the escalation counter for this production (snapshot-then-add, so
+		// all sources in one event used the same index above).
+		if (hasLadder && pHouseExt && unitIndex >= 0 && escIncrement > 0)
+			pHouseExt->AddEscalationCount(unitIndex, escIncrement);
 
 		// Log what we tried vs what placed so off counts are easy to diagnose
 		// (attempted<expected => tag/mult not read; made<attempted => placement).
 		if (attempted > 0)
-			Debug::Log("[CloningExt] %s from %s: made %d/%d (bailed=%d, specs=%d)\n",
+			Debug::Log("[CloningExt] %s from %s: made %d/%d (bailed=%d, specs=%d, escCount=%d)\n",
 				pType->ID, pFactory->Type->ID, made, attempted,
-				antaresBailed ? 1 : 0, baseSpecs);
+				antaresBailed ? 1 : 0, baseSpecs, escCount);
 	}
 
 	// A genuine production event kicks the unit out of a real infantry/unit

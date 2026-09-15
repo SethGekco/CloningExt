@@ -22,6 +22,11 @@ void BuildingTypeExt::ExtData::LoadFromINIFile(CCINIClass* pINI)
 	this->MultBlacklist.Read(exINI, pID, "Cloning.Mult.Blacklist");
 	this->ConsideredBuilt.Read(exINI, pID, "Cloning.ConsideredBuilt");
 	this->ConsideredBuiltWeight.Read(exINI, pID, "Cloning.ConsideredBuilt.Weight");
+
+	this->EscalateStartIndex.Read(exINI, pID, "Clone.Escalate.Index");
+	this->EscalateGlobalCount.Read(exINI, pID, "Clone.Escalate.Global.Count");
+	this->EscalateGlobalIndex.Read(exINI, pID, "Clone.Escalate.Global.Index");
+	this->EscalateGlobalCountMultiples.Read(exINI, pID, "Clone.Escalate.Global.CountMultiples");
 }
 
 // ============================================================================

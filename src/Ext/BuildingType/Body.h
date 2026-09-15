@@ -56,6 +56,22 @@ public:
 		Nullable<bool> ConsideredBuilt;
 		Valueable<int> ConsideredBuiltWeight;
 
+		// --- clone escalation (Global scope, Phase 1) ---------------------------
+		// Starting ladder index (before any threshold). Nullable so we can tell if
+		// this building opts into escalation at all.
+		Nullable<int> EscalateStartIndex;             // Clone.Escalate.Index
+		// Ascending count thresholds and the ladder index each switches to.
+		ValueableVector<int> EscalateGlobalCount;     // Clone.Escalate.Global.Count
+		ValueableVector<int> EscalateGlobalIndex;     // Clone.Escalate.Global.Index
+		// Does a batch of N clones count as +N (yes) or +1 (no)?
+		Valueable<bool> EscalateGlobalCountMultiples; // Clone.Escalate.Global.CountMultiples
+
+		// Is this building escalation-configured (uses the ladder for output)?
+		bool HasEscalation() const
+		{
+			return this->EscalateStartIndex.isset() || !this->EscalateGlobalCount.empty();
+		}
+
 		ExtData(BuildingTypeClass* OwnerObject)
 			: Extension<BuildingTypeClass>(OwnerObject)
 			, CloningFacility { false }
@@ -64,6 +80,10 @@ public:
 			, MultBlacklist {}
 			, ConsideredBuilt {}
 			, ConsideredBuiltWeight { 0 }
+			, EscalateStartIndex {}
+			, EscalateGlobalCount {}
+			, EscalateGlobalIndex {}
+			, EscalateGlobalCountMultiples { true }
 		{ }
 
 		virtual ~ExtData() = default;

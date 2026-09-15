@@ -45,6 +45,12 @@ public:
 		// the normal cloning-source enumeration.
 		ValueableVector<BuildingTypeClass*> ClonedAt;
 
+		// Escalation variant ladder: Clone.Escalate[0], [1], ... scanned until the
+		// first gap. The active index is chosen by the cloning building's escalation
+		// counter; the chosen entry becomes the default clone type. Null entries
+		// (unresolved IDs) are guarded at use. See docs/DESIGN.CloneEscalation.md.
+		ValueableVector<TechnoTypeClass*> EscalateLadder;
+
 		// Mirror of Antares' Cloneable=. Lets a modder suppress our extra-clone
 		// layer for a type without depending on Antares' invisible ext.
 		Valueable<bool> Cloneable { true };
@@ -72,6 +78,7 @@ public:
 			, Clones {}
 			, ClonedAsFallback {}
 			, ClonedAt {}
+			, EscalateLadder {}
 			, Cloneable { true }
 			, Veterancy {}
 			, Slots {}
