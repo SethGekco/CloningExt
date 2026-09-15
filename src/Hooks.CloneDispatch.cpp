@@ -141,13 +141,12 @@ namespace
 		return true;
 	}
 
-	// The Cloning.Mult a building applies to a given unit, honouring the
-	// Cloning.Mult.Blacklist exception from EITHER side (the building lists the
-	// unit, or the unit lists the building). A blacklisted pairing falls back to 1.
-	int EffectiveMult(BuildingTypeExt::ExtData* pBExt, BuildingTypeClass* pBType,
+	// Apply the Cloning.Mult.Blacklist exception (from EITHER side -- the building
+	// lists the unit, or the unit lists the building) to a raw multiplier value.
+	// A blacklisted pairing falls back to 1; <=0 is clamped to 0 (suppress).
+	int ApplyMultBlacklist(int m, BuildingTypeExt::ExtData* pBExt, BuildingTypeClass* pBType,
 		TechnoTypeExt::ExtData* pUExt, TechnoTypeClass* pUType)
 	{
-		int const m = pBExt->CloningMult;
 		if (m <= 1)
 			return m < 0 ? 0 : m; // 0 suppresses; 1 (and <0 clamp) is a no-op
 
@@ -157,6 +156,22 @@ namespace
 			return 1;
 
 		return m;
+	}
+
+	// Multiplier for BASE (per-source) clones: Cloning.Mult.
+	int EffectiveMult(BuildingTypeExt::ExtData* pBExt, BuildingTypeClass* pBType,
+		TechnoTypeExt::ExtData* pUExt, TechnoTypeClass* pUType)
+	{
+		return ApplyMultBlacklist(pBExt->CloningMult, pBExt, pBType, pUExt, pUType);
+	}
+
+	// Multiplier for SLOT-bonus clones: Cloning.Mult.Slots if set, else Cloning.Mult.
+	int EffectiveSlotMult(BuildingTypeExt::ExtData* pBExt, BuildingTypeClass* pBType,
+		TechnoTypeExt::ExtData* pUExt, TechnoTypeClass* pUType)
+	{
+		int const base = pBExt->CloningMultSlots.isset()
+			? pBExt->CloningMultSlots.Get() : pBExt->CloningMult;
+		return ApplyMultBlacklist(base, pBExt, pBType, pUExt, pUType);
 	}
 
 	// Should a clone made by this building, of this unit, be treated as "built"
@@ -277,7 +292,7 @@ namespace
 
 		// --- slot clone specs, kicked from the producing factory ---
 		auto const pFacExt = BuildingTypeExt::ExtMap.Find(pFactory->Type);
-		int const slotMult = pFacExt ? EffectiveMult(pFacExt, pFactory->Type, pExt, pType) : 1;
+		int const slotMult = pFacExt ? EffectiveSlotMult(pFacExt, pFactory->Type, pExt, pType) : 1;
 		bool const slotBuilt = ResolveConsideredBuilt(pFacExt, pExt);
 
 		for (auto const& slot : pExt->Slots)

@@ -73,8 +73,12 @@ Cloning.Mult=1            ; int, default 1. This building makes
                           ; asks for (2 clones from a default CloneCount=1 unit,
                           ; 4 from a CloneCount=2 unit). Also scales the
                           ; slot-bonus clones. 0 = this building never clones.
+Cloning.Mult.Slots=       ; int, optional. Separate multiplier for the slot-bonus
+                          ; clones. Unset => slots use Cloning.Mult; set => base
+                          ; clones and slot clones scale independently.
 Cloning.Mult.Blacklist=   ; TechnoType list. These units are exempt from THIS
-                          ; building's Cloning.Mult (cloned at multiplier 1).
+                          ; building's Cloning.Mult AND Cloning.Mult.Slots
+                          ; (cloned at multiplier 1).
 Cloning.ConsideredBuilt=  ; yes/no, unset by default. Whether clones this building
                           ; makes count as "built" for co-DLLs that detect
                           ; production (GiftBox/Host). Unset = defer to the unit /

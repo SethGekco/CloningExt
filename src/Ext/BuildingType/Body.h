@@ -36,10 +36,14 @@ public:
 		Valueable<bool> CloningFacility;
 
 		// Per-building clone multiplier (Cloning.Mult=, default 1). A cloning
-		// source makes CloneCount * Cloning.Mult clones of the produced unit, so
-		// this scales whatever the unit's own CloneCount asks for (and the
-		// slot-bonus clones it kicks out).
+		// source makes CloneCount * Cloning.Mult clones of the produced unit.
 		Valueable<int> CloningMult;
+
+		// Separate multiplier for the prerequisite/house SLOT-bonus clones
+		// (Cloning.Mult.Slots=). Unset => slots use Cloning.Mult (as before); set =>
+		// slots scale by this instead, letting base clones and slot clones multiply
+		// independently.
+		Nullable<int> CloningMultSlots;
 
 		// Units exempt from THIS building's Cloning.Mult (Cloning.Mult.Blacklist=).
 		// A listed unit is cloned at multiplier 1 by this building.
@@ -56,6 +60,7 @@ public:
 			: Extension<BuildingTypeClass>(OwnerObject)
 			, CloningFacility { false }
 			, CloningMult { 1 }
+			, CloningMultSlots {}
 			, MultBlacklist {}
 			, ConsideredBuilt {}
 			, ConsideredBuiltWeight { 0 }
