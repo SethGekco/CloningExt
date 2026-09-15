@@ -84,6 +84,18 @@ DEFINE_HOOK(0x443C81, BuildingClass_KickOutUnit_CloneInit_CloningExt, 0x7)
 	if (!IsCloneExit(pBuilding, pExiting))
 		return 0;
 
+	// Full NACLON override: if this (dedicated) vat is flagged to let CloningExt
+	// own its whole output, ABORT Antares' own base clone here. Returning the
+	// KickOutUnit "Failed" epilogue (0x445696: pops the 4 prologue regs, eax=0,
+	// add esp,0x130, ret 8 -- stack-correct from 0x443C81) makes Antares' own
+	// `if (KickOutUnit != Succeeded) Clone->UnInit()` clean the clone up. Our
+	// dispatch layer then produces every clone from this vat with full spec control.
+	if (auto const pBExt = BuildingTypeExt::ExtMap.Find(pBuilding->Type))
+	{
+		if (pBExt->OverrideBaseClone)
+			return 0x445696; // suppress Antares' base clone (it UnInits it)
+	}
+
 	auto const pType = pExiting->GetTechnoType();
 	auto const pExt = TechnoTypeExt::ExtMap.Find(pType);
 	if (!pExt || !pExt->Cloneable)

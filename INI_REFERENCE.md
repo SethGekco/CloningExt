@@ -80,6 +80,10 @@ CloningFacility=yes       ; Antares' tag, re-read by us so our extra-clone layer
                           ; can enumerate the same source buildings. A barracks
                           ; may set this AND produce normally (Fix 1): its primary
                           ; product is never treated as a clone.
+Clone.OverrideBaseClone=no ; on a DEDICATED vat (e.g. NACLON): suppress Antares'
+                          ; own base clone so CloningExt produces EVERY clone with
+                          ; full type/HP/count control (not just the extras). Lifts
+                          ; the NACLON caveat. Default no.
 Cloning.Mult=1            ; int, default 1. This building makes
                           ; CloneCount * Cloning.Mult clones of each unit, so
                           ; Cloning.Mult=2 doubles whatever the unit's CloneCount
@@ -169,12 +173,15 @@ counters are serialized (save/load-safe) and MP-sync-safe.
 
 ## Known limitations (this build)
 
-* **`CloneCount=0` suppression is partial.** Where Antares bailed (a factory
-  that clones itself, e.g. GAPILE with `Cloning=yes`) it produces zero clones, so
-  0 fully suppresses. Where Antares makes a base clone from a dedicated vat, that
-  one clone remains (we can't un-make Antares' clone in augment mode).
+* **`CloneCount=0` suppression is partial** *unless* the vat sets
+  `Clone.OverrideBaseClone=yes`. Where Antares bailed (a factory that clones itself,
+  e.g. GAPILE with `Cloning=yes`) it produces zero clones, so 0 fully suppresses.
+  At a dedicated vat, Antares' one base clone remains unless `Clone.OverrideBaseClone`
+  is set (which aborts it, letting CloningExt own the full output).
 * Our EXTRA clones use the produced type and do **not** honour Antares'
-  `ClonedAs=` (Antares' base clone still does).
+  `ClonedAs=` (Antares' base clone still does) — unless `Clone.OverrideBaseClone`
+  is set, in which case there is no Antares base clone and our `CloneAs` fully
+  controls every clone.
 * `CloneVeterancy.Inherit.Academy` / `.StolenTech` are non-decomposable from a
   co-loaded DLL (that data lives in Antares' ext). Setting **either** to `no`
   currently drops **all** inherited veterancy (conservative; never over-grants).

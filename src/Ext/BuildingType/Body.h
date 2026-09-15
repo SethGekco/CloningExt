@@ -39,6 +39,11 @@ public:
 		// source makes CloneCount * Cloning.Mult clones of the produced unit.
 		Valueable<int> CloningMult;
 
+		// Full-override: suppress Antares' own base clone at this (dedicated) vat so
+		// CloningExt produces EVERY clone with full spec control (type/HP/count),
+		// not just the extras. Default off. See docs / the 0x443C81 abort.
+		Valueable<bool> OverrideBaseClone;
+
 		// Separate multiplier for the prerequisite/house SLOT-bonus clones
 		// (Cloning.Mult.Slots=). Unset => slots use Cloning.Mult (as before); set =>
 		// slots scale by this instead, letting base clones and slot clones multiply
@@ -93,6 +98,7 @@ public:
 			: Extension<BuildingTypeClass>(OwnerObject)
 			, CloningFacility { false }
 			, CloningMult { 1 }
+			, OverrideBaseClone { false }
 			, CloningMultSlots {}
 			, MultBlacklist {}
 			, ConsideredBuilt {}

@@ -375,6 +375,11 @@ namespace
 			if (!isSource)
 				continue;
 
+			// Full override: we suppressed Antares' base clone at this vat
+			// (0x443C81 abort), so produce the full count ourselves.
+			if (pBExt->OverrideBaseClone)
+				antaresBase = 0;
+
 			int const mult = EffectiveMult(pBExt, pB->Type, pExt, pType);
 			bool const asBuilt = ResolveConsideredBuilt(pBExt, pExt);
 

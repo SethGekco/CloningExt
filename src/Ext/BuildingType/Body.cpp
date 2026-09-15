@@ -16,6 +16,7 @@ void BuildingTypeExt::ExtData::LoadFromINIFile(CCINIClass* pINI)
 
 	// Antares' own key name, read independently. See Body.h.
 	this->CloningFacility.Read(exINI, pID, "CloningFacility");
+	this->OverrideBaseClone.Read(exINI, pID, "Clone.OverrideBaseClone");
 
 	this->CloningMult.Read(exINI, pID, "Cloning.Mult");
 	this->CloningMultSlots.Read(exINI, pID, "Cloning.Mult.Slots");
