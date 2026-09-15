@@ -27,6 +27,8 @@ void BuildingTypeExt::ExtData::LoadFromINIFile(CCINIClass* pINI)
 	this->EscalateGlobalCount.Read(exINI, pID, "Clone.Escalate.Global.Count");
 	this->EscalateGlobalIndex.Read(exINI, pID, "Clone.Escalate.Global.Index");
 	this->EscalateGlobalCountMultiples.Read(exINI, pID, "Clone.Escalate.Global.CountMultiples");
+	this->EscalateUniversalCount.Read(exINI, pID, "Clone.Escalate.Universal.Count");
+	this->EscalateUniversalIndex.Read(exINI, pID, "Clone.Escalate.Universal.Index");
 }
 
 // ============================================================================

@@ -119,7 +119,7 @@ unit rather than being placed silently.
 The vanilla `Cloning=yes` (Cloning Vats) flag is honoured directly — no extra tag
 needed for classic infantry cloning.
 
-## Clone escalation (Global scope — Phase 1)
+## Clone escalation (Global + Universal scopes)
 
 Cloning a unit repeatedly walks its clones along a variant ladder. Full design in
 [docs/DESIGN.CloneEscalation.md](docs/DESIGN.CloneEscalation.md).
@@ -146,8 +146,19 @@ The active index = the `Index[]` of the highest passed `Count[]` (else the start
 index); it selects `Clone.Escalate[index]` as the default clone type. Unresolved
 ladder entries fall back to the produced type (safe without the inheritance ext).
 Every cloning source feeds the counter; escalation-configured vats also change
-their output. *Local (per-vat) and Universal (all-players race) scopes are Phase
-2/1.5 — see the design doc.*
+their output.
+
+**Universal scope (the "race"):** same table shape against the sum of ALL houses'
+counts — whoever mass-clones first escalates the unit for everyone.
+```ini
+[NADRAFT]
+Clone.Escalate.Universal.Count=50   ; world-wide total across all players
+Clone.Escalate.Universal.Index=3
+```
+If a vat sets both Global and Universal, the higher resulting index wins. Universal
+is derived from the per-house tally, so it shares `Clone.Escalate.Global.CountMultiples`
+(no separate Universal multiples control). *Local (per-vat) scope is still Phase 2 —
+see the design doc.*
 
 ## Known limitations (this build)
 

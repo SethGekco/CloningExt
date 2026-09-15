@@ -46,6 +46,8 @@
 #include <Helpers/Cast.h>
 #include <Utilities/Debug.h>
 
+#include <algorithm>
+
 namespace
 {
 	// Place an already-created clone at a free cell near pFrom via Unlimbo.
@@ -216,6 +218,45 @@ namespace
 		return best;
 	}
 
+	// Resolve a vat's ladder index across its configured scopes. Each configured
+	// scope (Global vs Universal) resolves independently; when both are set the
+	// higher resulting index wins (whichever escalation is further along). No scope
+	// configured -> the starting index.
+	int ResolveVatIndex(BuildingTypeExt::ExtData* pBExt, int houseCount, int universalCount)
+	{
+		int const start = pBExt->EscalateStartIndex.Get(0);
+		int idx = start;
+		bool have = false;
+
+		if (!pBExt->EscalateGlobalCount.empty())
+		{
+			idx = ResolveEscalateIndex(start, pBExt->EscalateGlobalCount,
+				pBExt->EscalateGlobalIndex, houseCount);
+			have = true;
+		}
+		if (!pBExt->EscalateUniversalCount.empty())
+		{
+			int const u = ResolveEscalateIndex(start, pBExt->EscalateUniversalCount,
+				pBExt->EscalateUniversalIndex, universalCount);
+			idx = have ? std::max(idx, u) : u;
+			have = true;
+		}
+		return idx;
+	}
+
+	// Clamp an index into a unit's ladder and return that type (may be null).
+	TechnoTypeClass* LadderTypeAt(TechnoTypeExt::ExtData* pExt, int idx)
+	{
+		auto const n = static_cast<int>(pExt->EscalateLadder.size());
+		if (n <= 0)
+			return nullptr;
+		if (idx < 0)
+			idx = 0;
+		if (idx >= n)
+			idx = n - 1;
+		return pExt->EscalateLadder[static_cast<size_t>(idx)];
+	}
+
 	// Produce our extra clones for a single primary-production event.
 	//
 	// Target semantics: each cloning-source building makes EXACTLY CloneCount
@@ -260,6 +301,19 @@ namespace
 		int const escCount = (hasLadder && pHouseExt && unitIndex >= 0)
 			? pHouseExt->GetEscalationCount(unitIndex) : 0;
 		int escIncrement = 0;
+
+		// Universal (all-players) count = sum of every house's per-type tally. No
+		// separate store: the per-house counter already tallies every laddered
+		// clone, so summing it gives the world total ("race" scope).
+		int universalCount = 0;
+		if (hasLadder && unitIndex >= 0)
+		{
+			for (int h = 0; h < HouseClass::Array.Count; ++h)
+			{
+				if (auto const pHE = HouseExt::ExtMap.Find(HouseClass::Array.GetItem(h)))
+					universalCount += pHE->GetEscalationCount(unitIndex);
+			}
+		}
 
 		// Did Antares' KickOutClones bail out entirely for this production? It
 		// bails when the producing factory is itself a cloning vat, or is not an
@@ -320,18 +374,13 @@ namespace
 			bool const asBuilt = ResolveConsideredBuilt(pBExt, pExt);
 
 			// Escalation: a configured vat swaps the DEFAULT clone type to its
-			// current ladder entry. Non-configured vats keep the normal default but
-			// still feed the counter below.
+			// current ladder entry (Global and/or Universal scope). Non-configured
+			// vats keep the normal default but still feed the counter below.
 			TechnoTypeClass* srcDefaultAs = defaultAs;
 			if (hasLadder && pBExt->HasEscalation())
 			{
-				int idx = ResolveEscalateIndex(pBExt->EscalateStartIndex.Get(0),
-					pBExt->EscalateGlobalCount, pBExt->EscalateGlobalIndex, escCount);
-				if (idx < 0)
-					idx = 0;
-				if (idx >= static_cast<int>(pExt->EscalateLadder.size()))
-					idx = static_cast<int>(pExt->EscalateLadder.size()) - 1;
-				if (auto const pLadderType = pExt->EscalateLadder[static_cast<size_t>(idx)])
+				int const idx = ResolveVatIndex(pBExt, escCount, universalCount);
+				if (auto const pLadderType = LadderTypeAt(pExt, idx))
 					srcDefaultAs = pLadderType; // null entry -> keep normal default
 			}
 
@@ -372,13 +421,8 @@ namespace
 		TechnoTypeClass* slotDefaultAs = defaultAs;
 		if (hasLadder && pFacExt && pFacExt->HasEscalation())
 		{
-			int idx = ResolveEscalateIndex(pFacExt->EscalateStartIndex.Get(0),
-				pFacExt->EscalateGlobalCount, pFacExt->EscalateGlobalIndex, escCount);
-			if (idx < 0)
-				idx = 0;
-			if (idx >= static_cast<int>(pExt->EscalateLadder.size()))
-				idx = static_cast<int>(pExt->EscalateLadder.size()) - 1;
-			if (auto const pLadderType = pExt->EscalateLadder[static_cast<size_t>(idx)])
+			int const idx = ResolveVatIndex(pFacExt, escCount, universalCount);
+			if (auto const pLadderType = LadderTypeAt(pExt, idx))
 				slotDefaultAs = pLadderType;
 		}
 

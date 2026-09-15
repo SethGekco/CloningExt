@@ -63,13 +63,22 @@ public:
 		// Ascending count thresholds and the ladder index each switches to.
 		ValueableVector<int> EscalateGlobalCount;     // Clone.Escalate.Global.Count
 		ValueableVector<int> EscalateGlobalIndex;     // Clone.Escalate.Global.Index
-		// Does a batch of N clones count as +N (yes) or +1 (no)?
+		// Does a batch of N clones count as +N (yes) or +1 (no)? This drives the
+		// per-house tally that BOTH Global and Universal read.
 		Valueable<bool> EscalateGlobalCountMultiples; // Clone.Escalate.Global.CountMultiples
+
+		// Universal scope: same table shape, but evaluated against the sum of ALL
+		// houses' counts (the "race"). Derived from the per-house tally, so it needs
+		// no separate store and shares Global's CountMultiples.
+		ValueableVector<int> EscalateUniversalCount;  // Clone.Escalate.Universal.Count
+		ValueableVector<int> EscalateUniversalIndex;  // Clone.Escalate.Universal.Index
 
 		// Is this building escalation-configured (uses the ladder for output)?
 		bool HasEscalation() const
 		{
-			return this->EscalateStartIndex.isset() || !this->EscalateGlobalCount.empty();
+			return this->EscalateStartIndex.isset()
+				|| !this->EscalateGlobalCount.empty()
+				|| !this->EscalateUniversalCount.empty();
 		}
 
 		ExtData(BuildingTypeClass* OwnerObject)
@@ -84,6 +93,8 @@ public:
 			, EscalateGlobalCount {}
 			, EscalateGlobalIndex {}
 			, EscalateGlobalCountMultiples { true }
+			, EscalateUniversalCount {}
+			, EscalateUniversalIndex {}
 		{ }
 
 		virtual ~ExtData() = default;
