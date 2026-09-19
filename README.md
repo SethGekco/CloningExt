@@ -18,6 +18,35 @@ hooks — see [`HOOKS_LOG.md`](HOOKS_LOG.md) for the architecture and
 | Extra clone slots by prerequisite/country | `CloneSlotN.*` incl. negative prereq & forbidden houses | ✅ |
 | Barracks that also clones | `CloningFacility=` on a factory | ✅ (Fix 1) |
 
+## Compatibility with TraitExt and other co-DLLs
+
+CloningExt has **no build- or run-time dependency on TraitExt** (or any co-DLL),
+so it is safe whether or not TraitExt is loaded — nothing to break if it is
+absent. Compatibility with TraitExt's features is inherent by construction, for
+three reasons:
+
+1. **Clones are created through the standard game paths** — `CreateObject` +
+   `Unlimbo`, or `KickOutUnit` when `Cloning.ConsideredBuilt=yes`. Any DLL that
+   hooks unit creation/production (TraitExt, Antares, Phobos) therefore processes
+   a clone exactly like any other unit, so **type-applied traits carry
+   automatically**.
+2. **Type references resolve TraitExt-authored types.** `CloneAs`,
+   `Clone.Escalate[i]`, `ClonedAt=` etc. are resolved by type ID after the type
+   arrays are populated. When TraitExt authors a variant via `$Inherits` (a real,
+   registered section), CloningExt resolves and clones it. An unresolved ID
+   null-guards to the produced type — so a ladder written against
+   not-yet-defined variants degrades safely instead of crashing.
+3. **`Cloning.ConsideredBuilt` is the bridge for production-detecting co-DLLs.**
+   If TraitExt (or GiftBox/Host, etc.) applies its effect on the "built" event,
+   marking a clone considered-built routes it through `KickOutUnit` so that DLL
+   sees it.
+
+What CloningExt does **not** do (by design): copy a *source unit's per-instance
+runtime traits* onto a clone — that state lives in TraitExt's own ext and a clone
+is a fresh instance. TraitExt re-applies runtime/conditional traits to the clone
+per its own rules. No CloningExt code is required for any of the above; the
+escalation ladder is the intended pairing point with TraitExt's inheritance.
+
 ## Build
 
 Windows, MSVC v142, x86. Requires the `YRpp` and `Phobos` submodules
@@ -32,8 +61,13 @@ CI (`.github/workflows/build.yml`) builds `DevBuild|x86` and uploads
 
 ## Status
 
-Infantry, naval and vehicle clone paths are all covered. Every hook address and
-register layout is verified against the `gamemd.exe` disassembly and upstream
-(Antares/Phobos) source, but **nothing has been exercised in a running game
-yet**. The `0x443C81` clone detection and the extra-clone recursion guard are the
-two things to watch first in-game.
+Deployed and validated in-game: clone quantity (`CloneCount`/`CloneAmount` ×
+`Cloning.Mult` + `Cloning.Mult.Slots`, `Cloning.Mult.Blacklist`), per-clone spec
+lists (`CloneAs` / `CloneInitialStrength[.Min]` / `CloneChance`, base + per-slot),
+prerequisite/house slots, `ClonedAt=` hijack, `CloneAs.LowPower` defects,
+`Cloning.ConsideredBuilt` (built-detection), the three-scope escalation ladder
+(Local/Global/Universal), and `Clone.OverrideBaseClone` (full vat ownership).
+
+The most invasive path is the override (`Clone.OverrideBaseClone`), which aborts
+Antares' own base clone mid-`KickOutUnit` via the `0x445696` Failed return — the
+one worth a focused in-game sanity check.
