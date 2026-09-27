@@ -40,6 +40,15 @@ CloneAs.LowPower=         ; TechnoType list. When the OWNER is in low power, spe
                           ; no change. Same idea per slot: CloneSlotN.As.LowPower.
 Cloneable=yes             ; mirror of Antares' tag; no = our layer never clones
                           ; this unit.
+CloneRank=                ; per-spec veterancy list (0=rookie,1=veteran,2=elite).
+                          ; Sets the clone's rank directly; overrides the
+                          ; CloneVeterancy.* inherit resolver. Unset = inherit.
+CloneAs.Random=no         ; yes = each clone rolls ONE weighted spec from the
+                          ; CloneAs list instead of producing every spec.
+CloneAs.Weights=          ; int list, per-spec weights for CloneAs.Random (default 1).
+Clone.MaxPerProduction=0  ; int, <=0 = no cap. Hard ceiling on total clones one
+                          ; build event may spawn (safety valve vs mult x slots x
+                          ; escalation runaways).
 Cloning.Mult.Blacklist=   ; BuildingType list. These buildings do NOT apply their
                           ; Cloning.Mult to this unit (it is cloned at multiplier
                           ; 1). The exception fires from either side -- building's
@@ -70,6 +79,9 @@ CloneSlot0.InitialStrength=100             ; percent list
 CloneSlot0.InitialStrength.Min=            ; percent list -> synced-RNG HP range
 CloneSlot0.Chance=100                      ; percent list, per-clone spawn chance
 CloneSlot0.As.LowPower=                    ; TechnoType list, defect type on low power
+CloneSlot0.Rank=                           ; per-spec veterancy (0/1/2)
+CloneSlot0.As.Random=no                    ; roll one weighted spec per clone
+CloneSlot0.As.Weights=                     ; per-spec weights for the roll
 ```
 
 ## BuildingType (the cloning building)

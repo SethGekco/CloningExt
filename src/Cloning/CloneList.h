@@ -18,6 +18,7 @@
 
 #include <algorithm>
 #include <utility>
+#include <cstdio>
 
 struct CloneList
 {
@@ -27,27 +28,35 @@ struct CloneList
 	ValueableVector<double> InitialStrengthMin; // percent; if set, HP rolls [Min, Strength]
 	ValueableVector<double> Chance;             // percent per-clone spawn chance (default 100)
 	ValueableVector<TechnoTypeClass*> AsLowPower; // alt type used when owner power is low
+	ValueableVector<double> Rank;               // explicit veterancy per spec (0/1/2); <0 = unset
+	Valueable<bool> RandomType { false };       // pick ONE spec per clone (weighted) instead of all
+	ValueableVector<int> Weights;               // per-spec weights for RandomType (default 1)
 
-	// Read the lists. amountAliasKey (optional) is read BEFORE amountKey so the
-	// primary key overrides it -- used for the CloneCount -> CloneAmount alias.
-	// The <base>.Chance and <base>As.LowPower keys are derived from asKey's prefix by
-	// the caller and passed in.
-	void Read(INI_EX& exINI, const char* section,
-		const char* amountKey, const char* asKey,
-		const char* strengthKey, const char* strengthMinKey,
-		const char* chanceKey, const char* asLowPowerKey,
+	// Read every key from a common prefix: <prefix>Amount, <prefix>As,
+	// <prefix>InitialStrength[.Min], <prefix>Chance, <prefix>As.LowPower,
+	// <prefix>Rank, <prefix>As.Random, <prefix>As.Weights. amountAliasKey (optional,
+	// e.g. "CloneCount") is read first so the primary <prefix>Amount overrides it.
+	void Read(INI_EX& exINI, const char* section, const char* prefix,
 		const char* amountAliasKey = nullptr)
 	{
+		char key[0x40];
+		auto const K = [&](const char* suffix) -> const char*
+		{
+			_snprintf_s(key, sizeof(key), "%s%s", prefix, suffix);
+			return key;
+		};
+
 		if (amountAliasKey)
 			this->Amount.Read(exINI, section, amountAliasKey);
-		this->Amount.Read(exINI, section, amountKey);
-		this->As.Read(exINI, section, asKey);
-		this->InitialStrength.Read(exINI, section, strengthKey);
-		this->InitialStrengthMin.Read(exINI, section, strengthMinKey);
-		if (chanceKey)
-			this->Chance.Read(exINI, section, chanceKey);
-		if (asLowPowerKey)
-			this->AsLowPower.Read(exINI, section, asLowPowerKey);
+		this->Amount.Read(exINI, section, K("Amount"));
+		this->As.Read(exINI, section, K("As"));
+		this->InitialStrength.Read(exINI, section, K("InitialStrength"));
+		this->InitialStrengthMin.Read(exINI, section, K("InitialStrength.Min"));
+		this->Chance.Read(exINI, section, K("Chance"));
+		this->AsLowPower.Read(exINI, section, K("As.LowPower"));
+		this->Rank.Read(exINI, section, K("Rank"));
+		this->RandomType.Read(exINI, section, K("As.Random"));
+		this->Weights.Read(exINI, section, K("As.Weights"));
 	}
 
 	bool Empty() const
@@ -140,7 +149,53 @@ struct CloneList
 		return static_cast<double>(roll) / 100.0;
 	}
 
+	// Explicit veterancy rank for spec i (0=rookie, 1=veteran, 2=elite). Returns
+	// <0 when unset, meaning "leave the clone's veterancy to the inherit system".
+	double RankAt(int i) const
+	{
+		if (this->Rank.empty())
+			return -1.0;
+		return (i < static_cast<int>(this->Rank.size()))
+			? this->Rank[static_cast<size_t>(i)]
+			: this->Rank.back();
+	}
+
+	// Weighted-random spec index over [0, specCount) using the synced RNG. Used
+	// only in RandomType mode. Weights default to 1; non-positive total => uniform.
+	int RollSpecIndex(int specCount) const
+	{
+		if (specCount <= 1)
+			return 0;
+
+		int total = 0;
+		for (int i = 0; i < specCount; ++i)
+			total += WeightAt(i);
+
+		if (total <= 0)
+			return ScenarioClass::Instance->Random.RandomRanged(0, specCount - 1);
+
+		int const roll = ScenarioClass::Instance->Random.RandomRanged(1, total);
+		int acc = 0;
+		for (int i = 0; i < specCount; ++i)
+		{
+			acc += WeightAt(i);
+			if (roll <= acc)
+				return i;
+		}
+		return specCount - 1;
+	}
+
 private:
+	int WeightAt(int i) const
+	{
+		if (this->Weights.empty())
+			return 1;
+		int const w = (i < static_cast<int>(this->Weights.size()))
+			? this->Weights[static_cast<size_t>(i)]
+			: this->Weights.back();
+		return w < 0 ? 0 : w;
+	}
+
 	static double ValueAt(const ValueableVector<double>& v, int i, double def)
 	{
 		if (v.empty())

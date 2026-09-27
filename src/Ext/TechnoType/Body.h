@@ -55,6 +55,11 @@ public:
 		// layer for a type without depending on Antares' invisible ext.
 		Valueable<bool> Cloneable { true };
 
+		// Hard cap on the total clones one production event may spawn for this unit
+		// (Clone.MaxPerProduction=). <=0 => no cap. A safety valve so big
+		// Cloning.Mult x slots x escalation combos can't spawn a lag-bomb.
+		Valueable<int> MaxPerProduction { 0 };
+
 		// Veterancy resolver (see Cloning/Resolver.h). HP is handled per-spec by
 		// CloneList now, not by CloneStrengthSpec.
 		CloneVeterancySpec Veterancy;
@@ -76,6 +81,7 @@ public:
 		ExtData(TechnoTypeClass* OwnerObject)
 			: Extension<TechnoTypeClass>(OwnerObject)
 			, Clones {}
+			, MaxPerProduction { 0 }
 			, ClonedAsFallback {}
 			, ClonedAt {}
 			, EscalateLadder {}

@@ -56,16 +56,12 @@ struct CloneSlot
 		_snprintf_s(key, sizeof(key), "CloneSlot%d.ForbiddenHouses", index);
 		this->ForbiddenHouses.Read(exINI, section, key);
 
-		char amountKey[0x40], asKey[0x40], strengthKey[0x40], strengthMinKey[0x40];
-		char chanceKey[0x40], asLowPowerKey[0x40];
-		_snprintf_s(amountKey, sizeof(amountKey), "CloneSlot%d.Amount", index);
-		_snprintf_s(asKey, sizeof(asKey), "CloneSlot%d.As", index);
-		_snprintf_s(strengthKey, sizeof(strengthKey), "CloneSlot%d.InitialStrength", index);
-		_snprintf_s(strengthMinKey, sizeof(strengthMinKey), "CloneSlot%d.InitialStrength.Min", index);
-		_snprintf_s(chanceKey, sizeof(chanceKey), "CloneSlot%d.Chance", index);
-		_snprintf_s(asLowPowerKey, sizeof(asLowPowerKey), "CloneSlot%d.As.LowPower", index);
-		this->Clones.Read(exINI, section, amountKey, asKey, strengthKey, strengthMinKey,
-			chanceKey, asLowPowerKey);
+		// Spec list under the "CloneSlotN." prefix -> CloneSlotN.Amount / .As /
+		// .InitialStrength[.Min] / .Chance / .As.LowPower / .Rank / .As.Random /
+		// .As.Weights.
+		char prefix[0x30];
+		_snprintf_s(prefix, sizeof(prefix), "CloneSlot%d.", index);
+		this->Clones.Read(exINI, section, prefix);
 	}
 
 	// Does the producing house satisfy every declared gate?

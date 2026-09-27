@@ -121,10 +121,12 @@ namespace
 		pClone->EstimatedHealth = hp;
 	}
 
-	// Create one clone of pCloneType, apply this spec's HP + the unit's veterancy,
-	// and place it. Returns true when it lands on the map.
+	// Create one clone of pCloneType, apply this spec's HP + veterancy, and place it.
+	// rank >= 0 sets an explicit veterancy (0=rookie/1=veteran/2=elite) and overrides
+	// the inherit resolver; rank < 0 defers to CloneVeterancy.*.
+	// Returns true when it lands on the map.
 	bool MakeClone(BuildingClass* pFrom, TechnoTypeClass* pCloneType, HouseClass* pOwner,
-		double hpPct, TechnoTypeExt::ExtData* pUExt, double vetSrc, bool asBuilt)
+		double hpPct, double rank, TechnoTypeExt::ExtData* pUExt, double vetSrc, bool asBuilt)
 	{
 		auto const pClone = static_cast<TechnoClass*>(pCloneType->CreateObject(pOwner));
 		if (!pClone)
@@ -139,7 +141,9 @@ namespace
 		// full health" bug). Post-placement the value sticks.
 		ApplyStrengthPct(pClone, pCloneType, hpPct);
 
-		if (pUExt->Veterancy.IsActive())
+		if (rank >= 0.0)
+			pClone->Veterancy.Veterancy = static_cast<float>(rank);
+		else if (pUExt->Veterancy.IsActive())
 			pClone->Veterancy.Veterancy = static_cast<float>(pUExt->Veterancy.Resolve(vetSrc));
 
 		return true;
@@ -291,6 +295,10 @@ namespace
 		int made = 0;      // clones actually placed
 		int attempted = 0; // clones we tried to make
 
+		// Clone.MaxPerProduction: hard cap on total clones from this one event.
+		int const cloneCap = pExt->MaxPerProduction;
+		bool const randomType = pExt->Clones.RandomType;
+
 		bool const isInfantry = (abstract_cast<InfantryClass*>(pProduction) != nullptr);
 		bool const factoryNaval = pFactory->Type->Naval;
 
@@ -405,23 +413,50 @@ namespace
 			}
 
 			// Each source makes (CloneAmount[i] * Cloning.Mult) clones of spec i;
-			// Antares' one base clone counts against spec 0.
+			// Antares' one base clone counts against spec 0. In RandomType mode the
+			// same total is produced but each clone rolls ONE weighted spec.
 			int clonesFromSource = 0;
-			for (int i = 0; i < baseSpecs; ++i)
+			if (randomType)
 			{
-				int amount = pExt->Clones.AmountAt(i) * mult;
-				if (i == 0)
-					amount -= antaresBase;
-				auto const pCloneType = pExt->Clones.AsAt(i, srcDefaultAs, lowPower);
+				int total = 0;
+				for (int i = 0; i < baseSpecs; ++i)
+					total += pExt->Clones.AmountAt(i);
+				total = total * mult - antaresBase;
 
-				for (int k = 0; k < amount; ++k)
+				for (int k = 0; k < total; ++k)
 				{
-					if (!pExt->Clones.RollChanceAt(i))
-						continue; // CloneChance says this one didn't spawn
+					if (cloneCap > 0 && attempted >= cloneCap)
+						break;
+					int const s = pExt->Clones.RollSpecIndex(baseSpecs);
+					if (!pExt->Clones.RollChanceAt(s))
+						continue;
 					++attempted;
 					++clonesFromSource;
-					double const hp = pExt->Clones.StrengthPctAt(i);
-					made += MakeClone(pB, pCloneType, pOwner, hp, pExt, vetSrc, asBuilt) ? 1 : 0;
+					auto const pCloneType = pExt->Clones.AsAt(s, srcDefaultAs, lowPower);
+					made += MakeClone(pB, pCloneType, pOwner, pExt->Clones.StrengthPctAt(s),
+						pExt->Clones.RankAt(s), pExt, vetSrc, asBuilt) ? 1 : 0;
+				}
+			}
+			else
+			{
+				for (int i = 0; i < baseSpecs; ++i)
+				{
+					int amount = pExt->Clones.AmountAt(i) * mult;
+					if (i == 0)
+						amount -= antaresBase;
+					auto const pCloneType = pExt->Clones.AsAt(i, srcDefaultAs, lowPower);
+
+					for (int k = 0; k < amount; ++k)
+					{
+						if (cloneCap > 0 && attempted >= cloneCap)
+							break;
+						if (!pExt->Clones.RollChanceAt(i))
+							continue; // CloneChance says this one didn't spawn
+						++attempted;
+						++clonesFromSource;
+						made += MakeClone(pB, pCloneType, pOwner, pExt->Clones.StrengthPctAt(i),
+							pExt->Clones.RankAt(i), pExt, vetSrc, asBuilt) ? 1 : 0;
+					}
 				}
 			}
 
@@ -468,6 +503,28 @@ namespace
 				continue;
 
 			int const specs = slot.Clones.SpecCount();
+			if (slot.Clones.RandomType)
+			{
+				int total = 0;
+				for (int j = 0; j < specs; ++j)
+					total += slot.Clones.AmountAt(j);
+				total *= slotMult;
+
+				for (int k = 0; k < total; ++k)
+				{
+					if (cloneCap > 0 && attempted >= cloneCap)
+						break;
+					int const s = slot.Clones.RollSpecIndex(specs);
+					if (!slot.Clones.RollChanceAt(s))
+						continue;
+					++attempted;
+					++clonesFromSlots;
+					auto const pCloneType = slot.Clones.AsAt(s, slotDefaultAs, lowPower);
+					made += MakeClone(pFactory, pCloneType, pOwner, slot.Clones.StrengthPctAt(s),
+						slot.Clones.RankAt(s), pExt, vetSrc, slotBuilt) ? 1 : 0;
+				}
+			}
+			else
 			for (int j = 0; j < specs; ++j)
 			{
 				int const amount = slot.Clones.AmountAt(j) * slotMult;
@@ -475,12 +532,14 @@ namespace
 
 				for (int k = 0; k < amount; ++k)
 				{
+					if (cloneCap > 0 && attempted >= cloneCap)
+						break;
 					if (!slot.Clones.RollChanceAt(j))
 						continue; // CloneSlotN.Chance says this one didn't spawn
 					++attempted;
 					++clonesFromSlots;
-					double const hp = slot.Clones.StrengthPctAt(j);
-					made += MakeClone(pFactory, pCloneType, pOwner, hp, pExt, vetSrc, slotBuilt) ? 1 : 0;
+					made += MakeClone(pFactory, pCloneType, pOwner, slot.Clones.StrengthPctAt(j),
+						slot.Clones.RankAt(j), pExt, vetSrc, slotBuilt) ? 1 : 0;
 				}
 			}
 		}
