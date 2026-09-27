@@ -556,6 +556,11 @@ namespace
 		if (hasLadder && pHouseExt && unitIndex >= 0 && escIncrement > 0)
 			pHouseExt->AddEscalationCount(unitIndex, escIncrement);
 
+		// Clone.RemoveOriginal: delete the produced unit (deferred to next frame),
+		// but only if at least one clone actually spawned to replace it.
+		if (pExt->RemoveOriginal && made > 0)
+			CloningExt::RemoveQueue.push_back(pProduction);
+
 		// Log what we tried vs what placed so off counts are easy to diagnose
 		// (attempted<expected => tag/mult not read; made<attempted => placement).
 		if (attempted > 0)
@@ -631,5 +636,40 @@ DEFINE_HOOK(0x4445F0, BuildingClass_KickOutUnit_ExtraClones_Vehicle, 0x6)
 	GET(BuildingClass*, pFactory, ESI);
 
 	Dispatch(pFactory, pProduction);
+	return 0;
+}
+
+// Clone.RemoveOriginal drain: per-frame logic tick (LogicClass::Update, before all
+// updates). Any unit queued for removal last frame is now fully placed and idle,
+// so Limbo()+UnInit() is safe here (unlike mid-KickOutUnit). Swap the queue out
+// first so the invalidation broadcast from UnInit can't re-enter a live queue.
+DEFINE_HOOK(0x55B4E1, LogicClass_Update_DrainCloneRemovals_CloningExt, 0x5)
+{
+	if (!CloningExt::RemoveQueue.empty())
+	{
+		std::vector<TechnoClass*> pending;
+		pending.swap(CloningExt::RemoveQueue);
+		for (auto const pTechno : pending)
+		{
+			if (!pTechno)
+				continue;
+			pTechno->Limbo();
+			pTechno->UnInit();
+		}
+	}
+	return 0;
+}
+
+// Purge the removal queue when the game invalidates a pointer, so a unit that dies
+// (or is otherwise freed) between queueing and the drain is never touched.
+DEFINE_HOOK(0x7258D0, AnnounceInvalidPointer_CloneRemovals_CloningExt, 0x6)
+{
+	GET(void* const, pInvalid, ECX);
+
+	auto& q = CloningExt::RemoveQueue;
+	q.erase(std::remove_if(q.begin(), q.end(),
+		[pInvalid](TechnoClass* p) { return static_cast<void*>(p) == pInvalid; }),
+		q.end());
+
 	return 0;
 }

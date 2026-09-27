@@ -60,6 +60,11 @@ public:
 		// Cloning.Mult x slots x escalation combos can't spawn a lag-bomb.
 		Valueable<int> MaxPerProduction { 0 };
 
+		// Clone.RemoveOriginal: delete the produced unit itself, leaving only its
+		// clones (a build-X-get-clones transmute). Only takes effect when >=1 clone
+		// actually spawns. Removal is deferred to the next logic frame (safe).
+		Valueable<bool> RemoveOriginal { false };
+
 		// Veterancy resolver (see Cloning/Resolver.h). HP is handled per-spec by
 		// CloneList now, not by CloneStrengthSpec.
 		CloneVeterancySpec Veterancy;
@@ -82,6 +87,7 @@ public:
 			: Extension<TechnoTypeClass>(OwnerObject)
 			, Clones {}
 			, MaxPerProduction { 0 }
+			, RemoveOriginal { false }
 			, ClonedAsFallback {}
 			, ClonedAt {}
 			, EscalateLadder {}

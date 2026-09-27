@@ -20,6 +20,7 @@ void TechnoTypeExt::ExtData::LoadFromINIFile(CCINIClass* pINI)
 	// is the back-compat alias for CloneAmount.
 	this->Clones.Read(exINI, pID, "Clone", "CloneCount");
 	this->MaxPerProduction.Read(exINI, pID, "Clone.MaxPerProduction");
+	this->RemoveOriginal.Read(exINI, pID, "Clone.RemoveOriginal");
 	this->ClonedAsFallback.Read(exINI, pID, "ClonedAs");
 	this->ClonedAt.Read(exINI, pID, "ClonedAt");
 	this->Cloneable.Read(exINI, pID, "Cloneable");

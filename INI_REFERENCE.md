@@ -49,6 +49,10 @@ CloneAs.Weights=          ; int list, per-spec weights for CloneAs.Random (defau
 Clone.MaxPerProduction=0  ; int, <=0 = no cap. Hard ceiling on total clones one
                           ; build event may spawn (safety valve vs mult x slots x
                           ; escalation runaways).
+Clone.RemoveOriginal=no   ; yes = delete the produced unit itself, leaving only
+                          ; its clones (build-X-get-clones transmute). Only fires
+                          ; when >=1 clone actually spawned; removal is deferred to
+                          ; the next logic frame (safe).
 Cloning.Mult.Blacklist=   ; BuildingType list. These buildings do NOT apply their
                           ; Cloning.Mult to this unit (it is cloned at multiplier
                           ; 1). The exception fires from either side -- building's
