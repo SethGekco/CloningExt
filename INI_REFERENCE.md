@@ -187,6 +187,32 @@ index wins**. Local has its own `CountMultiples` (separate per-instance store);
 Universal shares Global's (it is derived from the per-house tally). All three
 counters are serialized (save/load-safe) and MP-sync-safe.
 
+## Clone profile sections (`[<Type>.clone]`)
+
+Lets a unit's **clone** be mechanically different from the **built** original.
+When a clone's resolved type is `T` and a type with ID `T.clone` is registered,
+the clone comes out as `T.clone` instead; the built primary is unaffected.
+
+```ini
+[GGI]
+Strength=20
+[GGI.clone]      ; must be a real, registered type (see note) -- here "GGI but weaker"
+Strength=10
+```
+Now a vat-made GGI yields a full GGI (20) plus a GGI.clone (10). It composes with
+everything, because the redirect is applied at the single point every clone is
+created: `ClonedAs=GGI`, `CloneAs=...GGI...` and `Clone.Escalate[i]=GGI` all route
+their GGI output to `GGI.clone` too.
+
+* **Automatic — no toggle.** Presence of `[T.clone]` is the opt-in. The `.clone`
+  suffix is therefore reserved; a type already ending in `.clone` is never
+  redirected again (no recursion).
+* **The profile must be a registered TechnoType.** Stats like Strength/Speed/
+  weapons are type-level, so the clone has to *be* a different type. Author
+  `[GGI.clone]` and list it in `[InfantryTypes]` (or let the inheritance ext
+  create it by inheriting `[GGI]`). If `T.clone` isn't registered, the clone
+  stays `T` (safe). IDs cap at 23 chars, so `<base>.clone` must fit.
+
 ## Known limitations (this build)
 
 * **`CloneCount=0` suppression is partial** *unless* the vat sets

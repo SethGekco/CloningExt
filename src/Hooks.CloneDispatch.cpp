@@ -48,6 +48,8 @@
 #include <Utilities/Debug.h>
 
 #include <algorithm>
+#include <cstdio>
+#include <cstring>
 
 namespace
 {
@@ -121,6 +123,37 @@ namespace
 		pClone->EstimatedHealth = hp;
 	}
 
+	// "<id>.clone profile" redirect: if a type whose ID is "<pType ID>.clone" is
+	// registered, a CLONE of pType comes out as that profile instead -- letting a
+	// unit's clone be mechanically different from the built original (different
+	// Strength/Speed/weapons, since those are type-level). The profile type must
+	// already exist (authored by hand + listed in [InfantryTypes] etc., or created
+	// by the inheritance ext); absent => pType unchanged. A type already ending in
+	// ".clone" is never redirected again (no recursion). IDs cap at 23 chars, so
+	// "<base>.clone" must fit.
+	TechnoTypeClass* CloneProfileOf(TechnoTypeClass* pType)
+	{
+		if (!pType)
+			return pType;
+
+		const char* const id = pType->ID;
+		size_t const len = strlen(id);
+		if (len >= 6 && _strcmpi(id + (len - 6), ".clone") == 0)
+			return pType; // already a profile type
+
+		char target[0x20];
+		if (_snprintf_s(target, sizeof(target), _TRUNCATE, "%s.clone", id) < 0)
+			return pType; // would not fit a 24-char ID; cannot have been registered
+
+		for (int i = 0; i < TechnoTypeClass::Array.Count; ++i)
+		{
+			auto const pT = TechnoTypeClass::Array.GetItem(i);
+			if (pT && !_strcmpi(pT->ID, target))
+				return pT;
+		}
+		return pType;
+	}
+
 	// Create one clone of pCloneType, apply this spec's HP + veterancy, and place it.
 	// rank >= 0 sets an explicit veterancy (0=rookie/1=veteran/2=elite) and overrides
 	// the inherit resolver; rank < 0 defers to CloneVeterancy.*.
@@ -128,6 +161,11 @@ namespace
 	bool MakeClone(BuildingClass* pFrom, TechnoTypeClass* pCloneType, HouseClass* pOwner,
 		double hpPct, double rank, TechnoTypeExt::ExtData* pUExt, double vetSrc, bool asBuilt)
 	{
+		// Redirect to the unit's ".clone" profile type when one exists. This is the
+		// single choke point every clone passes through, so it covers the produced
+		// type, ClonedAs, CloneAs and the escalation ladder uniformly.
+		pCloneType = CloneProfileOf(pCloneType);
+
 		auto const pClone = static_cast<TechnoClass*>(pCloneType->CreateObject(pOwner));
 		if (!pClone)
 			return false;
