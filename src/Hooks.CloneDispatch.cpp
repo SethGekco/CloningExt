@@ -59,6 +59,10 @@ namespace CloningExt
 	// Filled by Hooks.CloneProfileInjection.cpp at rules-read time; read here
 	// once the type arrays exist, to name any profile that failed to parse.
 	extern std::vector<std::string> RegisteredProfiles;
+
+	// From Hooks.ConstructProfile.cpp.
+	TechnoTypeClass* OriginalTypeOf(TechnoClass* pThis);
+	void ForgetConstruct(TechnoClass* pThis);
 }
 #include <cstring>
 
@@ -374,7 +378,20 @@ namespace
 		if (!pOwner)
 			return;
 
-		auto const pType = pProduction->GetTechnoType();
+		// CLONES ARE CLONES OF WHAT YOU BUILT.
+		//
+		// A [<T>.construct] profile has already replaced the primary product's
+		// type by the time we get here, because that runs at KickOutUnit's
+		// ENTRY and this is further down the same function. Resolving from the
+		// converted type would clone GGI.construct, or send us hunting for
+		// GGI.construct.clone -- and it is incoherent besides: a clone was
+		// never constructed. Resolve from the pre-construct type, which also
+		// means Cloneable=/ClonedAs= are read off [GGI] where the modder set
+		// them rather than off the profile.
+		TechnoTypeClass* pType = pProduction->GetTechnoType();
+		if (auto const pBuiltAs = CloningExt::OriginalTypeOf(pProduction))
+			pType = pBuiltAs;
+
 		auto const pExt = TechnoTypeExt::ExtMap.Find(pType);
 		if (!pExt || !pExt->Cloneable)
 			return;
@@ -775,6 +792,10 @@ DEFINE_HOOK(0x7258D0, AnnounceInvalidPointer_CloneRemovals_CloningExt, 0x6)
 	q.erase(std::remove_if(q.begin(), q.end(),
 		[pInvalid](TechnoClass* p) { return static_cast<void*>(p) == pInvalid; }),
 		q.end());
+
+	// Same reason, different map: the construct-profile pass records what each
+	// built unit was BUILT as, and that record must not outlive the object.
+	CloningExt::ForgetConstruct(static_cast<TechnoClass*>(pInvalid));
 
 	return 0;
 }

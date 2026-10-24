@@ -18,6 +18,7 @@ hooks — see [`HOOKS_LOG.md`](HOOKS_LOG.md) for the architecture and
 | Extra clone slots by prerequisite/country | `CloneSlotN.*` incl. negative prereq & forbidden houses | ✅ |
 | Barracks that also clones | `CloningFacility=` on a factory | ✅ (Fix 1) |
 | Clone-only stat profiles | `[<Type>.clone]` sections, auto-registered | ✅ |
+| Built-only stat profiles | `[<Type>.construct]` sections, auto-registered | ✅ |
 
 ## Compatibility with TraitExt and other co-DLLs
 

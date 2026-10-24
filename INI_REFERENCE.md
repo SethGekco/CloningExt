@@ -242,6 +242,68 @@ their GGI output to `GGI.clone` too.
   This matches Ares, which does not define them for cloning. Use `ClonedAt=`
   (unit side) to restrict which buildings clone a unit.
 
+## Construct profile sections (`[<Type>.construct]`)
+
+The sibling of `[<Type>.clone]`, and its mirror image. Where that one says
+"this is what a **clone** of me looks like", this says "this is what a
+**factory-built** one looks like" — so a unit that arrives any other way keeps
+the base type.
+
+```ini
+[GGI]
+Strength=200
+[GGI.construct]      ; a GGI you BUILT
+Strength=300
+```
+
+A GGI from a barracks comes out at 300. A GGI from a superweapon, a free unit,
+a crate, a paradrop, the map, another DLL, or a cloning vat comes out at 200.
+
+### What counts as "constructed"
+
+Exactly one thing:
+
+```
+the building's factory was producing this object
+```
+
+That is stricter than "a factory kicked it out", and deliberately so — it also
+excludes anything else the same building might eject. Concretely:
+
+| arrives by | gets `.construct`? | why |
+|---|---|---|
+| barracks / war factory / naval yard / helipad | ✅ | it is the factory's product |
+| AI production | ✅ | same path |
+| cloning vat, or a `CloningFacility=` barracks' clone | ❌ | a clone never matches the factory's current product |
+| `FreeUnit=` on a building | ❌ | leaves through `Grand_Opening`, a different path |
+| superweapon (paradrop, drops) | ❌ | never reaches the production path |
+| crate, map-placed, DLL-spawned | ❌ | never reaches the production path |
+| **buildings** | ❌ | see below |
+
+**Buildings are excluded.** A building's foundation is written into map cells
+when it is placed, so changing its type afterwards leaves the old footprint
+occupied and never claims the new one. Infantry, vehicles and aircraft only.
+
+### It composes with `[<Type>.clone]`, in one direction
+
+**Clones are clones of what you built.** If `GGI` has both profiles, a vat-made
+pair is one `GGI.construct` (the built one) and one `GGI.clone` — *not* a clone
+of the construct profile. `Cloneable=` and `ClonedAs=` are likewise read off
+`[GGI]`, where you set them, not off the profile.
+
+There is no `[GGI.construct.clone]` and no `[GGI.clone.construct]`: a clone was
+never constructed, and a construct-variant is not itself cloned. A type whose ID
+already ends in either suffix never gets a profile of its own.
+
+### Same rules as `[<Type>.clone]`
+
+Registration is automatic, inheritance is a literal key copy at load, build keys
+are skipped, `TechLevel=-1` is forced, `Image=` is always written, and a profile
+that fails to parse is named in a WARN. **Do not put `$Inherits` on it** — see
+the warning under the clone profiles above. `.construct` costs 10 characters
+against the 23-character ID limit, so it runs out sooner than `.clone` does; an
+over-long profile is named in a WARN rather than silently ignored.
+
 ## Known limitations (this build)
 
 * **`CloneCount=0` suppression is partial** *unless* the vat sets

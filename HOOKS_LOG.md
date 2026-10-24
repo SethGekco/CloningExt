@@ -126,6 +126,47 @@ primary-product gate as the other two sites.
 
 ---
 
+## `0x443C60` — BuildingClass::KickOutUnit (function ENTRY) — construct profile  *(size 6)*
+
+| | |
+|---|---|
+| Contention | **none.** The entry is unclaimed by Antares, Ares and Phobos — they all hook the inner category branches. |
+| Status | **VERIFIED** site (encyclopedia `Building-Production-KickOut.md`, which records an in-game-verified built-only gate here); **UNTESTED in game** for this use |
+
+`__thiscall`: `ECX = BuildingClass*`, `[esp+4] = TechnoClass*`,
+`[esp+8] = CellStruct`. Size **6** (the `sub esp,0x130` prologue). The entry is a
+clean function boundary — the previous function ends `ret 0x4` at `0x443C5C`
+with NOP padding.
+
+**Why the entry and not the category branches.** `0x444119` / `0x444131` /
+`0x44531F` / `0x443CCA` are the busiest cluster in the subsystem, triple-hooked
+by Antares + Ares + Phobos, and **they hold the house in a different register at
+each site** — a handler copied between them is a silent wrong-pointer bug. The
+entry is one site instead of four and nobody is on it.
+
+**Why KickOutUnit at all.** It is the closest thing to a "a factory finished
+this" event, and paradrop, crates, map-placed and DLL-spawned units do not pass
+through it. Free units do not either: they leave through `Grand_Opening`'s own
+`NearByLocation` placement (`0x446AA9`–`0x446EE1`).
+
+**The gate:** `pBuilding->Factory && pBuilding->Factory->Object == pTechno`.
+Stricter than "is a production factory", because it also excludes anything else
+the same building might eject — a clone (never the factory's current product) or
+a free unit.
+
+**⚠ ORDERING against the clone dispatch.** This is the function ENTRY, so it
+runs BEFORE the clone dispatch sites (`0x444DBC` / `0x44441A` / `0x4445F0`)
+further down the same function. The primary product's type is therefore already
+the construct profile by the time cloning resolves what to clone — which would
+clone `GGI.construct`, or hunt for `GGI.construct.clone`. The construct pass
+records the pre-conversion type and the dispatch resolves from that:
+**clones are clones of what you built.**
+
+**⚠ Do not hook `0x443B90`.** That is the *previous* function (it ends `ret 0x4`
+at `0x443C5C`), not KickOutUnit.
+
+---
+
 ## `0x668BF0` — RulesClass::ReadFile — clone profile injection  *(size 5)*
 
 | | |

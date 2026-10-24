@@ -43,6 +43,24 @@ namespace
 		"InfantryTypes", "VehicleTypes", "AircraftTypes", "BuildingTypes",
 	};
 
+	// Every profile suffix this pass understands. A type whose ID already ends
+	// in one of these is never given a profile of its own -- that is what stops
+	// GGI.clone.construct and GGI.construct.clone from being looked for, and it
+	// is why the type-list membership snapshot below has to be taken before any
+	// appending happens.
+	const char* const kSuffixes[] = { ".clone", ".construct" };
+
+	bool EndsWithAnySuffix(const std::string& id)
+	{
+		for (const char* const sfx : kSuffixes)
+		{
+			const size_t sl = std::strlen(sfx);
+			if (id.size() >= sl && !_stricmp(id.c_str() + (id.size() - sl), sfx))
+				return true;
+		}
+		return false;
+	}
+
 	// Asked of the HOUSE while deciding what can be built, before any clone
 	// exists. Copying these onto a profile type is what would put a duplicate
 	// in the sidebar, and they could not be clone-specific anyway.
@@ -219,55 +237,60 @@ DEFINE_HOOK(0x668BF0, RulesClass_ReadFile_CloneProfileInjection, 0x5)
 
 		for (const auto& parent : members)
 		{
-			// A profile of a profile is not a thing. The dispatch side already
-			// refuses to redirect a type whose ID ends in .clone; this is the
-			// same rule one level up, and it is why the membership snapshot
-			// above has to be taken first.
-			const size_t pl = parent.size();
-			if (pl >= 6 && !_stricmp(parent.c_str() + (pl - 6), ".clone"))
+			// A profile of a profile is not a thing: a clone was not built, and
+			// a construct-variant is not itself cloned, so neither
+			// GGI.clone.construct nor GGI.construct.clone is meaningful.
+			if (EndsWithAnySuffix(parent))
 				continue;
 
-			const std::string profile = parent + ".clone";
-
-			// IDs are a fixed 24-byte field, so the suffix has to fit or the
-			// type can never be found by name.
-			if (profile.size() > 23)
+			for (const char* const sfx : kSuffixes)
 			{
-				if (pINI->GetSection(profile.c_str()))
-					Debug::Log("[CloningExt] WARN [%s] cannot be registered: the ID is "
-						"%d characters and the limit is 23. Rename [%s] shorter.\n",
-						profile.c_str(), static_cast<int>(profile.size()), parent.c_str());
-				continue;
-			}
+				const std::string profile = parent + sfx;
 
-			if (!pINI->GetSection(profile.c_str()))
-				continue;       // no profile authored for this type
+				// IDs are a fixed 24-byte field, so the suffix has to fit or
+				// the type can never be found by name. ".construct" costs 10
+				// characters, so it bites sooner than ".clone" does.
+				if (profile.size() > 23)
+				{
+					if (pINI->GetSection(profile.c_str()))
+						Debug::Log("[CloningExt] WARN [%s] cannot be registered: the ID "
+							"is %d characters and the limit is 23. Rename [%s] "
+							"shorter.\n", profile.c_str(),
+							static_cast<int>(profile.size()), parent.c_str());
+					continue;
+				}
 
-			if (ListContains(pINI, list, profile.c_str()))
-			{
-				// The modder registered it by hand. Still fill it out, because
-				// the hand-registered case is exactly where $Inherits was being
-				// relied on, but do not list it twice.
-				Debug::Log("[CloningExt] [%s] already listed in [%s]; completing it "
-					"in place\n", profile.c_str(), list);
+				if (!pINI->GetSection(profile.c_str()))
+					continue;       // no profile of this kind authored
+
+				if (ListContains(pINI, list, profile.c_str()))
+				{
+					// The modder registered it by hand. Still fill it out,
+					// because the hand-registered case is exactly where
+					// $Inherits was being relied on, but do not list it twice.
+					Debug::Log("[CloningExt] [%s] already listed in [%s]; completing "
+						"it in place\n", profile.c_str(), list);
+					InheritParentKeys(pINI, parent.c_str(), profile.c_str());
+					CloningExt::RegisteredProfiles.push_back(profile);
+					continue;
+				}
+
 				InheritParentKeys(pINI, parent.c_str(), profile.c_str());
+				AppendToList(pINI, list, profile.c_str());
 				CloningExt::RegisteredProfiles.push_back(profile);
-				continue;
+				++g_Registered;
+
+				Debug::Log("[CloningExt] [%s] registered as a type in [%s] - %s "
+					"produced as %s now come out as %s\n",
+					profile.c_str(), list,
+					!_stricmp(sfx, ".clone") ? "clones" : "FACTORY-BUILT units",
+					parent.c_str(), profile.c_str());
 			}
-
-			InheritParentKeys(pINI, parent.c_str(), profile.c_str());
-			AppendToList(pINI, list, profile.c_str());
-			CloningExt::RegisteredProfiles.push_back(profile);
-			++g_Registered;
-
-			Debug::Log("[CloningExt] [%s] registered as a type in [%s] - clones of "
-				"%s now come out as %s\n",
-				profile.c_str(), list, parent.c_str(), profile.c_str());
 		}
 	}
 
 	if (g_Registered)
-		Debug::Log("[CloningExt] %d clone profile(s) registered. They are "
+		Debug::Log("[CloningExt] %d profile(s) registered. They are "
 			"TechLevel=-1 and carry no build keys, so none of them can appear in "
 			"the sidebar.\n", g_Registered);
 
