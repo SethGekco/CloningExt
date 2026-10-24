@@ -17,6 +17,7 @@ hooks — see [`HOOKS_LOG.md`](HOOKS_LOG.md) for the architecture and
 | Clone initial HP (fixed or synced-random) | `CloneInitialStrength[.Min]` | ✅ |
 | Extra clone slots by prerequisite/country | `CloneSlotN.*` incl. negative prereq & forbidden houses | ✅ |
 | Barracks that also clones | `CloningFacility=` on a factory | ✅ (Fix 1) |
+| Clone-only stat profiles | `[<Type>.clone]` sections, auto-registered | ✅ |
 
 ## Compatibility with TraitExt and other co-DLLs
 
@@ -32,10 +33,19 @@ three reasons:
    automatically**.
 2. **Type references resolve TraitExt-authored types.** `CloneAs`,
    `Clone.Escalate[i]`, `ClonedAt=` etc. are resolved by type ID after the type
-   arrays are populated. When TraitExt authors a variant via `$Inherits` (a real,
-   registered section), CloningExt resolves and clones it. An unresolved ID
-   null-guards to the produced type — so a ladder written against
-   not-yet-defined variants degrades safely instead of crashing.
+   arrays are populated, so a variant TraitExt registered resolves and clones
+   like any other type. An unresolved ID null-guards to the produced type — so a
+   ladder written against not-yet-defined variants degrades safely instead of
+   crashing.
+
+   > ⚠ **Corrected 2026-10-23.** This used to say the variant works because
+   > TraitExt authors it "via `$Inherits` (a real, registered section)". The
+   > resolution half is right; the reasoning was not. `$Inherits` is a *read*-path
+   > fallback whose typed readers are flow-replacing, so a type built that way
+   > parsed with `Strength=0` — string reads inherited, the typed int read did
+   > not. Cloning such a variant produced a 0-HP clone. TraitExt now builds its
+   > variants by literal key copy, and CloningExt's own `[T.clone]` profiles do
+   > the same, so neither depends on `$Inherits` any more.
 3. **`Cloning.ConsideredBuilt` is the bridge for production-detecting co-DLLs.**
    If TraitExt (or GiftBox/Host, etc.) applies its effect on the "built" event,
    marking a clone considered-built routes it through `KickOutUnit` so that DLL

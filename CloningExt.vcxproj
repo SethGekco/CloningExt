@@ -35,6 +35,7 @@
     <ClCompile Include="src\Ext\Building\Body.cpp" />
     <!-- Feature hooks -->
     <ClCompile Include="src\Hooks.CloneInit.cpp" />
+    <ClCompile Include="src\Hooks.CloneProfileInjection.cpp" />
     <ClCompile Include="src\Hooks.CloneDispatch.cpp" />
   </ItemGroup>
 

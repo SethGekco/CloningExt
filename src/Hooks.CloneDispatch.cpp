@@ -39,6 +39,7 @@
 #include <BuildingClass.h>
 #include <InfantryClass.h>
 #include <InfantryTypeClass.h>
+#include <UnitClass.h>
 #include <UnitTypeClass.h>
 #include <HouseClass.h>
 #include <MapClass.h>
@@ -49,6 +50,16 @@
 
 #include <algorithm>
 #include <cstdio>
+#include <string>
+#include <unordered_map>
+#include <vector>
+
+namespace CloningExt
+{
+	// Filled by Hooks.CloneProfileInjection.cpp at rules-read time; read here
+	// once the type arrays exist, to name any profile that failed to parse.
+	extern std::vector<std::string> RegisteredProfiles;
+}
 #include <cstring>
 
 namespace
@@ -131,27 +142,72 @@ namespace
 	// by the inheritance ext); absent => pType unchanged. A type already ending in
 	// ".clone" is never redirected again (no recursion). IDs cap at 23 chars, so
 	// "<base>.clone" must fit.
+	// Resolved once, then cached. This used to walk the whole TechnoTypeClass
+	// array per clone created -- 580+ string compares for every clone, and a
+	// miss (the common case, since most types have no profile) paid the full
+	// scan. The map is built on first use, which is after the type arrays are
+	// populated, and that is also where we can finally report a profile that
+	// was registered into the INI but never became a type.
+	std::unordered_map<TechnoTypeClass*, TechnoTypeClass*> g_ProfileOf;
+	bool g_ProfileMapBuilt = false;
+
+	void BuildProfileMap()
+	{
+		g_ProfileMapBuilt = true;
+
+		std::unordered_map<std::string, TechnoTypeClass*> byID;
+		for (int i = 0; i < TechnoTypeClass::Array.Count; ++i)
+			if (auto const pT = TechnoTypeClass::Array.GetItem(i))
+				byID.emplace(pT->ID, pT);
+
+		int paired = 0;
+		for (auto const& kv : byID)
+		{
+			const std::string& id = kv.first;
+			if (id.size() < 7)
+				continue;
+			if (_strcmpi(id.c_str() + (id.size() - 6), ".clone") != 0)
+				continue;
+
+			auto const parent = byID.find(id.substr(0, id.size() - 6));
+			if (parent == byID.end())
+			{
+				Debug::Log("[CloningExt] WARN profile type '%s' exists but its parent "
+					"'%.*s' does not, so nothing will ever redirect to it\n",
+					id.c_str(), static_cast<int>(id.size() - 6), id.c_str());
+				continue;
+			}
+			g_ProfileOf.emplace(parent->second, kv.second);
+			++paired;
+		}
+
+		// Injection wrote these into the INI and listed them as types. If one is
+		// missing from the type array it did not parse -- say so HERE, by name,
+		// rather than silently cloning the base type and leaving the modder to
+		// wonder why the profile does nothing.
+		for (auto const& name : CloningExt::RegisteredProfiles)
+		{
+			if (byID.find(name) == byID.end())
+				Debug::Log("[CloningExt] WARN clone profile '%s' was registered at "
+					"load but is NOT in the type array - it did not parse. Clones "
+					"will come out as the base type. If other profiles worked, the "
+					"'.' in the ID is the suspect.\n", name.c_str());
+		}
+
+		Debug::Log("[CloningExt] clone profile map: %d profile(s) paired with a "
+			"parent type\n", paired);
+	}
+
 	TechnoTypeClass* CloneProfileOf(TechnoTypeClass* pType)
 	{
 		if (!pType)
 			return pType;
 
-		const char* const id = pType->ID;
-		size_t const len = strlen(id);
-		if (len >= 6 && _strcmpi(id + (len - 6), ".clone") == 0)
-			return pType; // already a profile type
+		if (!g_ProfileMapBuilt)
+			BuildProfileMap();
 
-		char target[0x20];
-		if (_snprintf_s(target, sizeof(target), _TRUNCATE, "%s.clone", id) < 0)
-			return pType; // would not fit a 24-char ID; cannot have been registered
-
-		for (int i = 0; i < TechnoTypeClass::Array.Count; ++i)
-		{
-			auto const pT = TechnoTypeClass::Array.GetItem(i);
-			if (pT && !_strcmpi(pT->ID, target))
-				return pT;
-		}
-		return pType;
+		auto const it = g_ProfileOf.find(pType);
+		return it == g_ProfileOf.end() ? pType : it->second;
 	}
 
 	// Create one clone of pCloneType, apply this spec's HP + veterancy, and place it.
@@ -338,7 +394,10 @@ namespace
 		bool const randomType = pExt->Clones.RandomType;
 
 		bool const isInfantry = (abstract_cast<InfantryClass*>(pProduction) != nullptr);
-		bool const factoryNaval = pFactory->Type->Naval;
+		// VehicleTypes are the only category CloningFacility= clones (per Ares:
+		// factoriesandcloning -- CloningFacility is the vehicle counterpart to the
+		// infantry Cloning= vat). Aircraft/buildings have no CloningFacility source.
+		bool const isVehicle = (abstract_cast<UnitClass*>(pProduction) != nullptr);
 
 		// Owner power state drives the CloneAs.LowPower defect-type swap.
 		bool const lowPower = pOwner->HasLowPower();
@@ -404,18 +463,26 @@ namespace
 			}
 			else if (isInfantry)
 			{
-				// Antares infantry clones come only from vanilla Cloning= vats
-				// (and only when it didn't bail); we also treat CloningFacility=.
-				isSource = pBExt->IsCloningSource();
+				// Infantry clones come only from vanilla Cloning= vats (CloningVats),
+				// mirroring Ares/Antares. CloningFacility= is the vehicle counterpart
+				// and does NOT clone infantry.
+				isSource = pB->Type->Cloning;
 				antaresBase = (!antaresBailed && pB->Type->Cloning) ? 1 : 0;
+			}
+			else if (isVehicle)
+			{
+				// Vehicle clones come from CloningFacility= whose Naval flag matches
+				// the cloned VehicleType's own Naval (Ares: "clone all VehicleTypes
+				// with the same Naval setting as itself"). Covers naval + land yards.
+				bool const navalMatch = (pB->Type->Naval == pType->Naval);
+				isSource = pBExt->CloningFacility && navalMatch;
+				antaresBase = (!antaresBailed && isSource) ? 1 : 0;
 			}
 			else
 			{
-				// Antares unit/naval clones come from CloningFacility= with a
-				// matching Naval flag.
-				bool const navalMatch = (pB->Type->Naval == factoryNaval);
-				isSource = pBExt->CloningFacility && navalMatch;
-				antaresBase = (!antaresBailed && isSource) ? 1 : 0;
+				// Aircraft / other categories have no cloning-vat source in Ares.
+				isSource = false;
+				antaresBase = 0;
 			}
 
 			if (!isSource)

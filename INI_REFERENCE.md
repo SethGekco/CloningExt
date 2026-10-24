@@ -207,11 +207,40 @@ their GGI output to `GGI.clone` too.
 * **Automatic — no toggle.** Presence of `[T.clone]` is the opt-in. The `.clone`
   suffix is therefore reserved; a type already ending in `.clone` is never
   redirected again (no recursion).
-* **The profile must be a registered TechnoType.** Stats like Strength/Speed/
-  weapons are type-level, so the clone has to *be* a different type. Author
-  `[GGI.clone]` and list it in `[InfantryTypes]` (or let the inheritance ext
-  create it by inheriting `[GGI]`). If `T.clone` isn't registered, the clone
-  stays `T` (safe). IDs cap at 23 chars, so `<base>.clone` must fit.
+* **Registration is automatic — just author the section.** CloningExt scans the
+  four type lists at rules-read time, and for every type `T` with a `[T.clone]`
+  section it fills the profile out from `[T]` and appends it to the same list.
+  You do **not** list it yourself, and you must **not** rely on `$Inherits` for
+  it (see below). If you have already listed it by hand that is fine — it is
+  completed in place rather than listed twice. IDs cap at 23 chars, so
+  `<base>.clone` must fit; a profile that is too long is named in a WARN.
+* **What inheriting `[T]` means here: a literal key copy, at load.** Every key
+  of `[T]` is copied into `[T.clone]` except the ones you wrote yourself (yours
+  win) and the build-list keys. `TechLevel=-1` is forced and `Image=` is always
+  written explicitly.
+
+  > ⚠ **Do not use `$Inherits` on a profile section.** `$Inherits` is not
+  > load-time flattening — it is a Phobos fallback on the INI *read* path, and
+  > its typed readers are flow-replacing rather than chainable, so whichever
+  > framework hooks them last wins. On 2026-10-23 a type built that way parsed
+  > with `Strength=0`: string reads inherited, the typed int read did not. A
+  > clone of such a profile has no health, and teleports if `Locomotor` did not
+  > inherit either. The literal copy above exists precisely to not depend on it.
+
+* **Why build keys are skipped and `TechLevel=-1` is forced.** A profile listed
+  in `[InfantryTypes]` is also sidebar-eligible, so copying
+  `Prerequisite`/`TechLevel`/`Owner` across would put a duplicate unit in your
+  build menu. Note a profile would otherwise be kept out of the sidebar only by
+  accident — `TechLevel` is an int, and int inheritance is the half that does
+  not work.
+* **If a profile does not parse, you are told.** Once the type arrays exist,
+  every profile registered at load is checked against them and any that is
+  missing is named in a WARN. Clones then come out as the base type (safe).
+* **`BuiltAt=` and `Factory.ExplicitOnly=` are production-only, deliberately.**
+  They gate which factories *build* a unit and have no effect on cloning: a
+  `CloningFacility=` clones everything otherwise eligible regardless of either.
+  This matches Ares, which does not define them for cloning. Use `ClonedAt=`
+  (unit side) to restrict which buildings clone a unit.
 
 ## Known limitations (this build)
 

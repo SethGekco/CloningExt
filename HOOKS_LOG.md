@@ -126,6 +126,40 @@ primary-product gate as the other two sites.
 
 ---
 
+## `0x668BF0` — RulesClass::ReadFile — clone profile injection  *(size 5)*
+
+| | |
+|---|---|
+| Contention | TraitExt sits on this address and **returns 0**, so Syringe chains ours after it. Antares/Phobos are not here. |
+| Status | **VERIFIED** chain-safe (TraitExt `src/Hooks.RulesInjection.cpp` returns 0); **UNTESTED in game** |
+
+`GET_STACK(CCINIClass*, pINI, 0x4)`. Runs before the engine parses the rules, so
+sections written here are parsed as if authored. Used to turn `[<T>.clone]`
+profile sections into real registered types: fill from `[T]` by **literal key
+copy**, force `TechLevel=-1`, write `Image=` explicitly, append to the same type
+list as `T`.
+
+**First pass only.** The rules read happens more than once; writing on a later
+pass risks the section having been read already.
+
+**Why a literal copy and not `$Inherits`.** `$Inherits` is a Phobos *read*-path
+fallback (`INIClass::GetString`'s not-found branch plus companion typed readers),
+and those typed hooks are flow-replacing rather than chainable. A type built that
+way parsed with `Strength=0` on 2026-10-23 — string reads inherited, the typed
+int read did not. We write the INI before parsing, so a literal copy cannot be
+defeated by read-path hook ordering and does not care whether Phobos is loaded.
+See `YR-Hook-Encyclopedia/encyclopedia/INI-Read-Inheritance.md`.
+
+**Two traps worth keeping in the code.** The membership snapshot of each type
+list must be taken *before* appending, or the pass walks over the profiles it
+just added and looks for `GGI.clone.clone`. And "has the author already written
+this key" must be answered by `GetKeyName` enumeration, **not** by a read —
+`ReadString` routes through the `$Inherits` fallback, so a profile carrying
+`$Inherits=` would report every key as authored, nothing would be copied, and
+the hollow type would be back.
+
+---
+
 ## Container lifecycle (no game logic, all `return 0`, chained)
 
 Copied from Phobos develop @47475624 via AcademyExt/SuperWeaponExt; ASSUMED-safe
