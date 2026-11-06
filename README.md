@@ -82,3 +82,8 @@ prerequisite/house slots, `ClonedAt=` hijack, `CloneAs.LowPower` defects,
 The most invasive path is the override (`Clone.OverrideBaseClone`), which aborts
 Antares' own base clone mid-`KickOutUnit` via the `0x445696` Failed return — the
 one worth a focused in-game sanity check.
+
+`[<Type>.construct]` is **not yet seen in game**. Its first build most likely
+never fired for a human player (see CHANGELOG.md, 2026-11-06). The proof it
+works is a `[CloningExt] CONSTRUCT <T> ... -> <T>.construct (built by a
+factory)` line in `debug.log` for a unit you built from the sidebar.

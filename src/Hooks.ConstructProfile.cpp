@@ -25,12 +25,22 @@
 //
 // ## What "constructed" means, precisely
 //
-//     pBuilding->Factory && pBuilding->Factory->Object == pTechno
+//     some FactoryClass has Object == pTechno
 //
-// "This is the object the factory was producing." That is stronger than asking
+// "This is the object a factory was producing." That is stronger than asking
 // whether the building is a production factory, because it also excludes
 // anything else the same building might kick out -- a clone (which never
-// matches the factory's current product) or a free unit.
+// matches a factory's current product) or a free unit.
+//
+// The factory is found through FactoryClass::Array, NOT pBuilding->Factory.
+// Sidebar production belongs to the house: HouseClass::Begin_Production
+// creates the FactoryClass (ctor call at 0x4FA4F5) and never writes
+// BuildingClass::Factory (+0x524), so for every unit a human player builds
+// that field is null here. The only writes to it are a building's own factory
+// (0x450387) and KickOutUnit lending a busy factory's pointer to an idle twin
+// (0x44451F-0x444552). The first build of this file tested pBuilding->Factory
+// alone and so most likely never fired for human players. The factory clears
+// Object only after a successful kick-out, so it is still set at the entry.
 //
 // ## Ordering against [<Type>.clone] -- read this before changing anything
 //
@@ -95,6 +105,22 @@ namespace
 			// footprint occupied and never claims the new one.
 			return nullptr;
 		}
+	}
+
+	// Was pTechno the object a factory was producing? The building's own
+	// Factory is checked first; house-owned (sidebar) production never sets it,
+	// so every live factory is scanned too. See the header comment, 'What
+	// "constructed" means, precisely'.
+	bool IsFactoryProduct(BuildingClass* pBuilding, TechnoClass* pTechno)
+	{
+		if (pBuilding->Factory && pBuilding->Factory->Object == pTechno)
+			return true;
+		for (auto const pFactory : FactoryClass::Array)
+		{
+			if (pFactory && pFactory->Object == pTechno)
+				return true;
+		}
+		return false;
 	}
 
 	// Find <id>.construct among the registered types. Cached, because this runs
@@ -277,10 +303,10 @@ DEFINE_HOOK(0x443C60, BuildingClass_KickOutUnit_ConstructProfile, 0x6)
 	if (!pBuilding || !pTechno)
 		return 0;
 
-	// "This is the object the factory was producing." Excludes clones (they
-	// never match the factory's current product) and anything else the same
+	// "This is the object a factory was producing." Excludes clones (they
+	// never match a factory's current product) and anything else the same
 	// building might kick out.
-	if (!pBuilding->Factory || pBuilding->Factory->Object != pTechno)
+	if (!IsFactoryProduct(pBuilding, pTechno))
 		return 0;
 
 	if (!g_MapBuilt)

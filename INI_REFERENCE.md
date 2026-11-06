@@ -264,8 +264,13 @@ a crate, a paradrop, the map, another DLL, or a cloning vat comes out at 200.
 Exactly one thing:
 
 ```
-the building's factory was producing this object
+a factory was producing this object
 ```
+
+(The factory is usually the house's, not the building's: sidebar production
+belongs to the house, so the check looks at every live factory rather than
+the building's own. The first build checked only the building's, which most
+likely meant `.construct` never applied to anything a human player built.)
 
 That is stricter than "a factory kicked it out", and deliberately so — it also
 excludes anything else the same building might eject. Concretely:

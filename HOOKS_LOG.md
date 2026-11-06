@@ -61,8 +61,15 @@ clones and our own extras uniformly.
 
 Clone-vs-primary discrimination (handles "a barracks that also clones", Fix 1):
 `isCloneExit = building is a cloning source (Type->Cloning || our CloningFacility)`
-`&& !(building->Factory && building->Factory->Object == exitingObject)`. The
-primary product matches `Factory->Object` and is left untouched.
+`&& (ProducingExtras || building is not a production factory)`. The primary
+product of a factory that also clones is neither one of our extras nor leaving
+a non-factory, so it is left untouched.
+
+> ⚠ An earlier version of this note gave the test as
+> `!(building->Factory && building->Factory->Object == exitingObject)`. The
+> code does not use it, and must not: `BuildingClass::Factory` (`+0x524`) is
+> null for sidebar production, which the house owns
+> (`HouseClass::Begin_Production`, `0x4FA4F5`). See the `0x443C60` entry below.
 
 ---
 
@@ -85,9 +92,13 @@ EDI = TechnoClass*     (the Production — unit that just rolled out)
 `0x44441A` stolen bytes: `8b b6 18 02 00 00` (`mov esi,[esi+0x218]`) — ESI is read
 as the factory **before** this reassigns it, exactly as Antares does.
 
-We only act on the **primary product** (`factory->Factory->Object == Production`),
-which is what makes each production event fire once and prevents clone re-entry
-from recursing.
+We only act on the **primary product**: the building must be a real
+infantry/unit production factory (`Type->Factory`, so a vat's clones fall out),
+and `ProducingExtras` must be clear (so our own extra clones, which re-enter
+through these sites, are not counted as fresh production). That is what makes
+each production event fire once and prevents clone re-entry from recursing. (An
+earlier version of this note said `factory->Factory->Object == Production`; that
+field is null for sidebar production, and the code stopped using it.)
 
 ---
 
@@ -149,10 +160,23 @@ this" event, and paradrop, crates, map-placed and DLL-spawned units do not pass
 through it. Free units do not either: they leave through `Grand_Opening`'s own
 `NearByLocation` placement (`0x446AA9`–`0x446EE1`).
 
-**The gate:** `pBuilding->Factory && pBuilding->Factory->Object == pTechno`.
+**The gate:** `IsFactoryProduct` — `pBuilding->Factory->Object == pTechno`, or
+else some entry of `FactoryClass::Array` (`0xA83E30`) has `Object == pTechno`.
 Stricter than "is a production factory", because it also excludes anything else
-the same building might eject — a clone (never the factory's current product) or
+the same building might eject — a clone (never a factory's current product) or
 a free unit.
+
+> ⚠ **Fixed 2026-11-06.** The first build tested `pBuilding->Factory` alone, and
+> that never matches a unit a human player builds. Sidebar production belongs
+> to the house: `HouseClass::Begin_Production` creates the `FactoryClass` (ctor
+> call at `0x4FA4F5`) and never writes `BuildingClass::Factory` (`+0x524`). The
+> only writes to that field are a building's own factory (`0x450387`) and
+> `KickOutUnit` lending a busy factory's pointer to an idle twin
+> (`0x44451F`–`0x444552`). So `.construct` most likely never fired for human
+> players. The factory clears `Object` only after a successful kick-out, so it
+> is still set at the entry. Same fix as CosmeticExt `aa65ffc`, whose
+> `(factory)` lines showed up in Rex's 11-01 game for units built at `GAWEAP`.
+> **UNTESTED in game** for `.construct`.
 
 **⚠ ORDERING against the clone dispatch.** This is the function ENTRY, so it
 runs BEFORE the clone dispatch sites (`0x444DBC` / `0x44441A` / `0x4445F0`)
