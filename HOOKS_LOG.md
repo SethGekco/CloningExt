@@ -172,11 +172,14 @@ a free unit.
 > call at `0x4FA4F5`) and never writes `BuildingClass::Factory` (`+0x524`). The
 > only writes to that field are a building's own factory (`0x450387`) and
 > `KickOutUnit` lending a busy factory's pointer to an idle twin
-> (`0x44451F`–`0x444552`). So `.construct` most likely never fired for human
-> players. The factory clears `Object` only after a successful kick-out, so it
-> is still set at the entry. Same fix as CosmeticExt `aa65ffc`, whose
-> `(factory)` lines showed up in Rex's 11-01 game for units built at `GAWEAP`.
-> **UNTESTED in game** for `.construct`.
+> (`0x44451F`–`0x444552`). The first write runs only when the owner's
+> `Production` flag is set (`HouseClass +0x1EE`, tested at `0x4502FA`), which
+> is AI production. So the old test saw AI-built units (68 engineer
+> conversions in Rex's logs, 10-30 to 11-06) and never a human player's. The
+> factory clears `Object` only after a successful kick-out, so it is still set
+> at the entry. Same fix as CosmeticExt `aa65ffc`, whose `(factory)` lines
+> showed up in Rex's 11-01 game for units built at `GAWEAP`.
+> **UNTESTED in game** for a human-built `.construct` unit.
 
 **⚠ ORDERING against the clone dispatch.** This is the function ENTRY, so it
 runs BEFORE the clone dispatch sites (`0x444DBC` / `0x44441A` / `0x4445F0`)

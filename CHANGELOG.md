@@ -3,6 +3,27 @@
 > Newest first. Every change gets an entry in the same commit, and says *why*:
 > the reason is what saves the next session.
 
+## 2026-11-06 — deployed f8283de; the old `.construct` test did fire, for the AI
+
+### Deployed
+- Live `CloningExt.dll` / `.map` = CI run 42313985567 artifact (f8283de),
+  sha256 `c6af4cad…`. Backups `CloningExt.dll.bak-20261106-195030` and
+  `CloningExt.map.bak-20261106-195030` (= 54db49d, sha256 `ab7f7c4d…`, which
+  matched the live file byte for byte). Same 37 hooks, same sizes, as 54db49d.
+  The new 0x443C60 handler reads `FactoryClass::Array` through a pointer that
+  holds `0xA83E30`, then `Items` at +4 and `Count` at +0x10.
+
+### Found
+- Rex's logs from 10-30 to 11-06 hold 68 `CONSTRUCT ENGINEER … (built by a
+  factory)` lines from the old build (8 logs; `[ENGINEER.construct]` is in his
+  `rulesmd.ini`). So the old test was not dead. It matched units the AI built.
+  The building creates its own factory (`0x450387`) only when its owner's
+  `Production` flag is set (`HouseClass +0x1EE`, checked at `0x4502FA`; YRpp:
+  "AI production has begun"). AI production therefore sets
+  `BuildingClass::Factory`, and sidebar production does not.
+- So the fix changes nothing for the AI. What it adds, a unit a human player
+  builds from the sidebar, is still unseen in game.
+
 ## 2026-11-06 — `.construct` now sees units a human player builds
 
 ### Fixed
